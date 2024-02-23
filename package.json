@@ -166,5 +166,8 @@
     "name": "RNSynchronySDKReactNativeSpec",
     "type": "modules",
     "jsSrcsDir": "src"
+  },
+  "dependencies": {
+    "tsconfig": "^7.0.0"
   }
 }

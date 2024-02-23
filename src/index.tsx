@@ -1,19 +1,14 @@
-import {
-  GF_RET_CODE,
-  BluetoothDeviceStateEx,
-  ResponseResult,
-  DataNotifFlags,
-  NotifDataType,
+import { DeviceStateEx, DataType } from './NativeSynchronySDKReactNative';
+
+import type {
+  BLEDevice,
+  SynchronySample,
+  SynchronyData,
 } from './NativeSynchronySDKReactNative';
 
-export {
-  GF_RET_CODE,
-  BluetoothDeviceStateEx,
-  ResponseResult,
-  DataNotifFlags,
-  NotifDataType,
-};
+export { DeviceStateEx, DataType };
 
-export function multiply(a: number, b: number): Promise<number> {
-  return SynchronySDKReactNative.multiply(a, b);
-}
+export type { BLEDevice, SynchronySample, SynchronyData };
+
+import SynchronyProfile from './SynchronyProfile';
+export { SynchronyProfile };
