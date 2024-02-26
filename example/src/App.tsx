@@ -41,6 +41,7 @@ export default function App() {
             //do some logic
           } else {
             //draw with sample.data & sample.channelIndex
+            console.log(sample.channelIndex + ' | ' + sample.sampleIndex);
           }
         });
       });

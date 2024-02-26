@@ -116,6 +116,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
           }
           ++impedanceIndex;
           SynchronyData.Sample dataSample = new SynchronyData.Sample();
+
           dataSample.channelIndex = channelIndex;
           dataSample.sampleIndex = lastSampleIndex;
           dataSample.timeStampInMs = lastSampleIndex * sampleInterval;
@@ -165,7 +166,8 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
       Deque<SynchronyData.Sample> channelSamples = synchronyData.channelSamples[channelIndex];
       WritableArray samplesResult = Arguments.createArray();
 
-      for (int sampleIndex = 0;sampleIndex < channelSamples.size();++sampleIndex){
+      int channelSampleSize = channelSamples.size();
+      for (int sampleIndex = 0;sampleIndex < channelSampleSize;++sampleIndex){
         SynchronyData.Sample sample = channelSamples.poll();
         WritableMap sampleResult = Arguments.createMap();
         sampleResult.putInt("rawData", sample.rawData);
@@ -175,7 +177,6 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
         sampleResult.putDouble("data", sample.data);
         sampleResult.putDouble("impedance", sample.impedance);
         sampleResult.putBoolean("isLost", sample.isLost);
-
         samplesResult.pushMap(sampleResult);
       }
       channelsResult.pushArray(samplesResult);
@@ -232,7 +233,6 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
           }
           readSamples(data, synchronyData, offset, 0);
           synchronyData.lastPackageIndex = newPackageIndex;
-
           sendSynchronyData(context, synchronyData);
 
         }catch (Exception e){
