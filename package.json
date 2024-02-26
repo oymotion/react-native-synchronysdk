@@ -1,6 +1,6 @@
 {
   "name": "react-native-synchronysdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "OYMotion Synchrony sdk for react native",
   "main": "lib/commonjs/index",
   "module": "lib/module/index",
