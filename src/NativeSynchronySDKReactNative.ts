@@ -26,6 +26,7 @@ export type SynchronySample = {
   impedance: number;
   timeStampInMs: number;
   sampleIndex: number;
+  channelIndex: number;
   isLost: boolean;
 };
 

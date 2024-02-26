@@ -31,10 +31,19 @@ export default function App() {
 
     SyncControllerInstance.onDataCallback = (data: SynchronyData) => {
       if (data.dataType === DataType.NTF_EEG) {
-        console.log('got eeg data' + '\n' + JSON.stringify(data));
+        console.log('got eeg data');
       } else if (data.dataType === DataType.NTF_ECG) {
-        console.log('got ecg data' + '\n' + JSON.stringify(data));
+        console.log('got ecg data');
       }
+      data.channelSamples.forEach((oneChannelSamples) => {
+        oneChannelSamples.forEach((sample) => {
+          if (sample.isLost) {
+            //do some logic
+          } else {
+            //draw with sample.data & sample.channelIndex
+          }
+        });
+      });
     };
   }, []);
 

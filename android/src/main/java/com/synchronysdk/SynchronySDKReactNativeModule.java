@@ -52,6 +52,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
     public double K;
     static class Sample {
       public int timeStampInMs;
+      public int channelIndex;
       public int sampleIndex;
       public int rawData;
       public float data;
@@ -115,6 +116,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
           }
           ++impedanceIndex;
           SynchronyData.Sample dataSample = new SynchronyData.Sample();
+          dataSample.channelIndex = channelIndex;
           dataSample.sampleIndex = lastSampleIndex;
           dataSample.timeStampInMs = lastSampleIndex * sampleInterval;
           dataSample.impedance = impedance;
@@ -168,6 +170,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
         WritableMap sampleResult = Arguments.createMap();
         sampleResult.putInt("rawData", sample.rawData);
         sampleResult.putInt("sampleIndex", sample.sampleIndex);
+        sampleResult.putInt("channelIndex", sample.channelIndex);
         sampleResult.putInt("timeStampInMs", sample.timeStampInMs);
         sampleResult.putDouble("data", sample.data);
         sampleResult.putDouble("impedance", sample.impedance);
