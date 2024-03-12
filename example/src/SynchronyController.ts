@@ -67,8 +67,8 @@ class SynchronyController {
           resolve(devices);
         })
         .catch((reason) => {
-          console.log(reason);
-          reject('Is bluetooth open?');
+          // console.log(reason);
+          reject(reason.message);
         });
     });
   }

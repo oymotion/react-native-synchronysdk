@@ -2,11 +2,11 @@ import type { TurboModule } from 'react-native';
 import { TurboModuleRegistry } from 'react-native';
 
 export enum DeviceStateEx {
-  disconnected,
-  connecting,
-  connected,
-  ready,
-  disconnecting,
+  Disconnected,
+  Connecting,
+  Connected,
+  Ready,
+  Disconnecting,
 }
 
 export enum DataType {
@@ -24,6 +24,7 @@ export type SynchronySample = {
   rawData: number;
   data: number;
   impedance: number;
+  rail: number;
   timeStampInMs: number;
   sampleIndex: number;
   channelIndex: number;
@@ -31,7 +32,7 @@ export type SynchronySample = {
 };
 
 export type SynchronyData = {
-  dataType: number;
+  dataType: DataType;
   lastPackageIndex: number;
   resolutionBits: number;
   sampleRate: number;
@@ -43,6 +44,8 @@ export type SynchronyData = {
 };
 
 export interface Spec extends TurboModule {
+  addListener(eventType: string): void;
+  removeListeners(count: number): void;
   startScan(timeoutInMs: number): Promise<Array<BLEDevice>>;
   stopScan(): Promise<void>;
   connect(device: BLEDevice): Promise<boolean>;

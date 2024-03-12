@@ -1,0 +1,6 @@
+framework module synchrony {
+  umbrella header "synchrony.h"
+
+  export *
+  module * { export * }
+}

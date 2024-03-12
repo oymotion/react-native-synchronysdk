@@ -2,10 +2,10 @@ import type { EmitterSubscription } from 'react-native';
 import { NativeEventEmitter } from 'react-native';
 import { SynchronySDKReactNative } from './ModuleResolver';
 
-import type {
-  BLEDevice,
+import {
   DeviceStateEx,
-  SynchronyData,
+  type BLEDevice,
+  type SynchronyData,
 } from './NativeSynchronySDKReactNative';
 
 export default class SynchronyProfile {
@@ -18,6 +18,7 @@ export default class SynchronyProfile {
   constructor() {
     this.nativeEventEmitter = new NativeEventEmitter(SynchronySDKReactNative);
   }
+
   //-----Callbacks-----//
   AddOnErrorCallback(callback: (reason: string) => void) {
     this.RemoveOnErrorCallback();
@@ -63,7 +64,19 @@ export default class SynchronyProfile {
   }
 
   getDeviceState(): DeviceStateEx {
-    return SynchronySDKReactNative.getDeviceState();
+    let value = SynchronySDKReactNative.getDeviceState();
+    if (value === 'Disconnected') {
+      return DeviceStateEx.Disconnected;
+    } else if (value === 'Disconnecting') {
+      return DeviceStateEx.Disconnecting;
+    } else if (value === 'Connected') {
+      return DeviceStateEx.Connected;
+    } else if (value === 'Connecting') {
+      return DeviceStateEx.Connecting;
+    } else if (value === 'Ready') {
+      return DeviceStateEx.Ready;
+    }
+    return value;
   }
 
   startScan(timeoutInMs: number): Promise<Array<BLEDevice>> {

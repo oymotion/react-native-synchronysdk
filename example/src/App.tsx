@@ -1,5 +1,5 @@
 import * as React from 'react';
-
+// import VConsole from '@kafudev/react-native-vconsole';
 import { StyleSheet, View, Text, Button } from 'react-native';
 import SyncControllerInstance from './SynchronyController';
 import {
@@ -15,11 +15,61 @@ export default function App() {
   const [message, setMessage] = React.useState<string | undefined>();
   const [hasInit, setInit] = React.useState<boolean>();
   const [dataTransfer, setDataTransfer] = React.useState<boolean>();
+  const [eegInfo, setEEGInfo] = React.useState<string | undefined>();
+  const [eegSample, setEEGSample] = React.useState<string | undefined>();
+  const [ecgInfo, setECGInfo] = React.useState<string | undefined>();
+  const [ecgSample, setECGSample] = React.useState<string | undefined>();
+  const lastEEG = React.useRef<SynchronyData>();
+  const lastECG = React.useRef<SynchronyData>();
+  let loopTimer = React.useRef<NodeJS.Timeout>();
+
+  function processSampleData(data: SynchronyData) {
+    if (data.channelSamples.length > 0) {
+      if (data.channelSamples[0]!.length > 0) {
+        let sample = data.channelSamples[0]![0]!;
+        const sampleMsg =
+          'time: ' +
+          sample.timeStampInMs +
+          ' \n data: ' +
+          sample.data +
+          ' \n impedance: ' +
+          sample.impedance;
+
+        if (data.dataType === DataType.NTF_EEG) {
+          const msg =
+            'channel count:' +
+            data.channelCount +
+            ' sample rate: ' +
+            data.sampleRate;
+          setEEGInfo(msg);
+          setEEGSample(sampleMsg);
+        } else if (data.dataType === DataType.NTF_ECG) {
+          const msg =
+            'channel count:' +
+            data.channelCount +
+            ' sample rate: ' +
+            data.sampleRate;
+          setECGInfo(msg);
+          setECGSample(sampleMsg);
+        }
+      }
+    }
+  }
 
   React.useEffect(() => {
+    if (!loopTimer.current) {
+      loopTimer.current = setInterval(() => {
+        const eeg = lastEEG.current;
+        const ecg = lastECG.current;
+        if (eeg) processSampleData(eeg);
+
+        if (ecg) processSampleData(ecg);
+      }, 1000);
+    }
+
     SyncControllerInstance.onStateChanged = (newstate: DeviceStateEx) => {
       setState(newstate);
-      if (newstate === DeviceStateEx.disconnected) {
+      if (newstate === DeviceStateEx.Disconnected) {
         setInit(false);
         setDataTransfer(false);
       }
@@ -31,47 +81,57 @@ export default function App() {
 
     SyncControllerInstance.onDataCallback = (data: SynchronyData) => {
       if (data.dataType === DataType.NTF_EEG) {
-        console.log('got eeg data');
+        lastEEG.current = data;
       } else if (data.dataType === DataType.NTF_ECG) {
-        console.log('got ecg data');
+        lastECG.current = data;
       }
-      data.channelSamples.forEach((oneChannelSamples) => {
-        oneChannelSamples.forEach((sample) => {
-          if (sample.isLost) {
-            //do some logic
-          } else {
-            //draw with sample.data & sample.channelIndex
-            console.log(sample.channelIndex + ' | ' + sample.sampleIndex);
-          }
-        });
-      });
+
+      //process data as you wish
+      // data.channelSamples.forEach((oneChannelSamples) => {
+      //   oneChannelSamples.forEach((sample) => {
+      //     if (sample.isLost) {
+      //       //do some logic
+      //     } else {
+      //       //draw with sample.data & sample.channelIndex
+      //       // console.log(sample.channelIndex + ' | ' + sample.sampleIndex + ' | ' + sample.data + ' | ' + sample.impedance + ' | ' + sample.rail);
+      //     }
+      //   });
+      // });
     };
   }, []);
 
   return (
     <View style={styles.container}>
-      <Text>Device: {JSON.stringify(device)}</Text>
-      <Text />
-      <Text>State: {DeviceStateEx[Number(state)]}</Text>
-      <Text />
-      <Text>Message: {message} </Text>
-      <Text />
       <Button
         onPress={() => {
+          if (
+            SyncControllerInstance.connectionState !==
+            DeviceStateEx.Disconnected
+          ) {
+            setMessage('please scan if disconnected');
+            return;
+          }
+
           setMessage('scanning');
           SyncControllerInstance.startSearch()
             .then((devices) => {
               setMessage('');
               if (devices.length > 0) {
-                setDevice(devices[0]);
+                let selected = devices[0]!;
+                devices.forEach((bleDevice) => {
+                  if (bleDevice.RSSI > selected.RSSI) {
+                    selected = bleDevice;
+                  }
+                });
+                setDevice(selected);
               } else {
                 setDevice(null);
               }
-              setState(DeviceStateEx.disconnected);
+              setState(DeviceStateEx.Disconnected);
             })
             .catch((reason: string) => {
               setDevice(null);
-              setState(DeviceStateEx.disconnected);
+              setState(DeviceStateEx.Disconnected);
               setMessage(reason);
             });
         }}
@@ -80,14 +140,14 @@ export default function App() {
       <Text />
       <Button
         onPress={() => {
-          if (SyncControllerInstance.connectionState === DeviceStateEx.ready) {
+          if (SyncControllerInstance.connectionState === DeviceStateEx.Ready) {
             setMessage('disconnect');
             setInit(false);
             setDataTransfer(false);
             SyncControllerInstance.disconnect();
           } else if (
             SyncControllerInstance.connectionState !==
-              DeviceStateEx.connected &&
+              DeviceStateEx.Connected &&
             device
           ) {
             setMessage('connect');
@@ -99,18 +159,27 @@ export default function App() {
       <Text />
       <Button
         onPress={async () => {
-          if (SyncControllerInstance.connectionState === DeviceStateEx.ready) {
+          if (SyncControllerInstance.connectionState === DeviceStateEx.Ready) {
             const firmwareVersion =
               await SyncControllerInstance.firmwareVersion();
             const batteryPower = await SyncControllerInstance.batteryPower();
             const inited = await SyncControllerInstance.init();
             setInit(inited);
-            setMessage(
+            console.log(
               'Version: ' +
                 firmwareVersion +
-                ' | power: ' +
+                ' \n power: ' +
                 batteryPower +
-                ' | inited: ' +
+                ' \n inited: ' +
+                inited
+            );
+
+            setMessage(
+              '\nVersion: ' +
+                firmwareVersion +
+                ' \n power: ' +
+                batteryPower +
+                ' \n inited: ' +
                 inited
             );
           }
@@ -124,7 +193,7 @@ export default function App() {
             setMessage('please init first');
             return;
           }
-          if (SyncControllerInstance.connectionState === DeviceStateEx.ready) {
+          if (SyncControllerInstance.connectionState === DeviceStateEx.Ready) {
             if (dataTransfer) {
               setMessage('stop DataNotification');
               setDataTransfer(false);
@@ -138,6 +207,28 @@ export default function App() {
         }}
         title="start/stop"
       />
+      <Text />
+      <Text style={styles.text}>Device: {device?.Name}</Text>
+      <Text />
+      <Text style={styles.text}>State: {DeviceStateEx[Number(state)]}</Text>
+      <Text />
+      <Text style={styles.text}>Message: {message} </Text>
+      <Text />
+      <Text style={styles.text}>EEG info: {eegInfo} </Text>
+      <Text />
+      <Text style={styles.text}>EEG sample: {eegSample} </Text>
+      <Text />
+      <Text style={styles.text}>ECG info: {ecgInfo} </Text>
+      <Text />
+      <Text style={styles.text}>ECG sample: {ecgSample} </Text>
+      <Text />
+      <Text />
+
+      {/* <VConsole
+        appInfo={{
+        }}
+        console={__DEV__ ? !console.time : true}
+      /> */}
     </View>
   );
 }
@@ -152,5 +243,9 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     marginVertical: 20,
+  },
+  text: {
+    fontSize: 20,
+    color: 'red',
   },
 });
