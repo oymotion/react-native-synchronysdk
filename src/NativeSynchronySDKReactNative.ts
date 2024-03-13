@@ -24,7 +24,7 @@ export type SynchronySample = {
   rawData: number;
   data: number;
   impedance: number;
-  rail: number;
+  saturation: number;
   timeStampInMs: number;
   sampleIndex: number;
   channelIndex: number;

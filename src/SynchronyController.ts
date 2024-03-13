@@ -2,7 +2,7 @@ import { PermissionsAndroid, Platform } from 'react-native';
 import { DeviceStateEx, SynchronyProfile } from 'react-native-synchronysdk';
 import type { BLEDevice, SynchronyData } from 'react-native-synchronysdk';
 
-class SynchronyController {
+export default class SynchronyController {
   private static _instance: SynchronyController;
 
   private synchronyProfile: SynchronyProfile;
@@ -12,7 +12,6 @@ class SynchronyController {
   }
 
   public static get Instance() {
-    // Do you need arguments? Make it a regular static method instead.
     return this._instance || (this._instance = new this());
   }
 
@@ -49,7 +48,7 @@ class SynchronyController {
     }
   }
 
-  public async startSearch(): Promise<Array<BLEDevice>> {
+  public async startSearch(timeoutInMs: number): Promise<Array<BLEDevice>> {
     return new Promise<Array<BLEDevice>>(async (resolve, reject) => {
       if (Platform.OS !== 'ios') {
         const result = await this.requestPermissionAndroid();
@@ -61,13 +60,11 @@ class SynchronyController {
       }
 
       this.synchronyProfile
-        .startScan(3000)
-        .then((devices) => {
-          console.log(JSON.stringify(devices));
+        .startScan(timeoutInMs)
+        .then((devices: BLEDevice[]) => {
           resolve(devices);
         })
-        .catch((reason) => {
-          // console.log(reason);
+        .catch((reason: Error) => {
           reject(reason.message);
         });
     });
@@ -84,9 +81,11 @@ class SynchronyController {
   public async disconnect(): Promise<boolean> {
     return this.synchronyProfile.disconnect();
   }
+
   public async startDataNotification(): Promise<boolean> {
     return this.synchronyProfile.startDataNotification();
   }
+
   public async stopDataNotification(): Promise<boolean> {
     return this.synchronyProfile.stopDataNotification();
   }
@@ -136,6 +135,3 @@ class SynchronyController {
     return false;
   }
 }
-
-const SyncControllerInstance = SynchronyController.Instance;
-export default SyncControllerInstance;

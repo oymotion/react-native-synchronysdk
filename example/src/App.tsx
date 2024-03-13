@@ -1,13 +1,15 @@
 import * as React from 'react';
 // import VConsole from '@kafudev/react-native-vconsole';
 import { StyleSheet, View, Text, Button } from 'react-native';
-import SyncControllerInstance from './SynchronyController';
 import {
+  SynchronyController,
   DeviceStateEx,
   type BLEDevice,
   type SynchronyData,
   DataType,
 } from 'react-native-synchronysdk';
+
+const SyncControllerInstance = SynchronyController.Instance;
 
 export default function App() {
   const [device, setDevice] = React.useState<BLEDevice | null>();
@@ -24,35 +26,47 @@ export default function App() {
   let loopTimer = React.useRef<NodeJS.Timeout>();
 
   function processSampleData(data: SynchronyData) {
+    let samplesMsg = '';
     if (data.channelSamples.length > 0) {
-      if (data.channelSamples[0]!.length > 0) {
-        let sample = data.channelSamples[0]![0]!;
-        const sampleMsg =
-          'time: ' +
-          sample.timeStampInMs +
-          ' \n data: ' +
-          sample.data +
-          ' \n impedance: ' +
-          sample.impedance;
+      samplesMsg =
+        'time: ' +
+        data.channelSamples[0]![0]!.timeStampInMs +
+        'ms' +
+        ' index: ' +
+        data.channelSamples[0]![0]!.sampleIndex;
 
-        if (data.dataType === DataType.NTF_EEG) {
-          const msg =
-            'channel count:' +
-            data.channelCount +
-            ' sample rate: ' +
-            data.sampleRate;
-          setEEGInfo(msg);
-          setEEGSample(sampleMsg);
-        } else if (data.dataType === DataType.NTF_ECG) {
-          const msg =
-            'channel count:' +
-            data.channelCount +
-            ' sample rate: ' +
-            data.sampleRate;
-          setECGInfo(msg);
-          setECGSample(sampleMsg);
-        }
-      }
+      data.channelSamples.forEach((oneChannelSamples) => {
+        let sample = oneChannelSamples[0]!;
+        const sampleMsg =
+          ' \n' +
+          (sample.channelIndex + 1) +
+          ' | data: ' +
+          sample.data.toFixed(0) +
+          'uV | ' +
+          ' impedance: ' +
+          (sample.impedance / 1000).toFixed(0) +
+          'K';
+
+        samplesMsg = samplesMsg + sampleMsg;
+      });
+    }
+
+    if (data.dataType === DataType.NTF_EEG) {
+      const msg =
+        'channel count:' +
+        data.channelCount +
+        ' sample rate: ' +
+        data.sampleRate;
+      setEEGInfo(msg);
+      setEEGSample(samplesMsg);
+    } else if (data.dataType === DataType.NTF_ECG) {
+      const msg =
+        'channel count:' +
+        data.channelCount +
+        ' sample rate: ' +
+        data.sampleRate;
+      setECGInfo(msg);
+      setECGSample(samplesMsg);
     }
   }
 
@@ -62,7 +76,6 @@ export default function App() {
         const eeg = lastEEG.current;
         const ecg = lastECG.current;
         if (eeg) processSampleData(eeg);
-
         if (ecg) processSampleData(ecg);
       }, 1000);
     }
@@ -87,16 +100,16 @@ export default function App() {
       }
 
       //process data as you wish
-      // data.channelSamples.forEach((oneChannelSamples) => {
-      //   oneChannelSamples.forEach((sample) => {
-      //     if (sample.isLost) {
-      //       //do some logic
-      //     } else {
-      //       //draw with sample.data & sample.channelIndex
-      //       // console.log(sample.channelIndex + ' | ' + sample.sampleIndex + ' | ' + sample.data + ' | ' + sample.impedance + ' | ' + sample.rail);
-      //     }
-      //   });
-      // });
+      data.channelSamples.forEach((oneChannelSamples) => {
+        oneChannelSamples.forEach((sample) => {
+          if (sample.isLost) {
+            //do some logic
+          } else {
+            //draw with sample.data & sample.channelIndex
+            // console.log(sample.channelIndex + ' | ' + sample.sampleIndex + ' | ' + sample.data + ' | ' + sample.impedance);
+          }
+        });
+      });
     };
   }, []);
 
@@ -113,7 +126,7 @@ export default function App() {
           }
 
           setMessage('scanning');
-          SyncControllerInstance.startSearch()
+          SyncControllerInstance.startSearch(3000)
             .then((devices) => {
               setMessage('');
               if (devices.length > 0) {
@@ -138,6 +151,7 @@ export default function App() {
         title="search"
       />
       <Text />
+
       <Button
         onPress={() => {
           if (SyncControllerInstance.connectionState === DeviceStateEx.Ready) {
@@ -245,7 +259,12 @@ const styles = StyleSheet.create({
     marginVertical: 20,
   },
   text: {
-    fontSize: 20,
+    fontSize: 14,
     color: 'red',
+  },
+  button: {
+    fontSize: 20,
+    color: 'blue',
+    borderColor: 'red',
   },
 });

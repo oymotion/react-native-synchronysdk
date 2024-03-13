@@ -14,7 +14,7 @@ const int MAX_CHANNEL_COUNT = 32;
 @property (atomic, assign) float rawData;
 @property (atomic, assign) float convertData;
 @property (atomic, assign) float impedance;
-@property (atomic, assign) float rail;
+@property (atomic, assign) float saturation;
 @end
 
 
@@ -37,11 +37,6 @@ const int MAX_CHANNEL_COUNT = 32;
 
 
 
-
-
-
-
-
 #ifdef RCT_NEW_ARCH_ENABLED
 #import <React/RCTBridgeModule.h>
 #import "RNSynchronySDKReactNativeSpec.h"
@@ -60,7 +55,7 @@ const int MAX_CHANNEL_COUNT = 32;
 @property (atomic, strong) SynchronyData* eegData;
 @property (atomic, strong) SynchronyData* ecgData;
 @property (atomic, strong) NSMutableArray* impedanceData;
-@property (atomic, strong) NSMutableArray* railData;
+@property (atomic, strong) NSMutableArray* saturationData;
 @property (atomic, assign) int lastImpedanceIndex;
 @property (atomic, assign) DataNotifyFlags dataFlag;
 @property (atomic, assign) BOOL hasStartDataTransfer;

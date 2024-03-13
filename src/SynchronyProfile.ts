@@ -79,6 +79,10 @@ export default class SynchronyProfile {
     return value;
   }
 
+  handleError(error: any) {
+    this.nativeEventEmitter.emit('GOT_ERROR', error);
+  }
+
   startScan(timeoutInMs: number): Promise<Array<BLEDevice>> {
     return SynchronySDKReactNative.startScan(timeoutInMs);
   }
@@ -91,25 +95,68 @@ export default class SynchronyProfile {
   disconnect(): Promise<boolean> {
     return SynchronySDKReactNative.disconnect();
   }
-  startDataNotification(): Promise<boolean> {
-    return SynchronySDKReactNative.startDataNotification();
+  async startDataNotification(): Promise<boolean> {
+    try {
+      const result = await SynchronySDKReactNative.startDataNotification();
+      return result;
+    } catch (error) {
+      this.handleError(error);
+      return false;
+    }
   }
-  stopDataNotification(): Promise<boolean> {
-    return SynchronySDKReactNative.stopDataNotification();
+  async stopDataNotification(): Promise<boolean> {
+    try {
+      const result = await SynchronySDKReactNative.stopDataNotification();
+      return result;
+    } catch (error) {
+      this.handleError(error);
+      return false;
+    }
   }
-  initEEG(): Promise<boolean> {
-    return SynchronySDKReactNative.initEEG();
+  async initEEG(): Promise<boolean> {
+    try {
+      const result = await SynchronySDKReactNative.initEEG();
+      return result;
+    } catch (error) {
+      this.handleError(error);
+      return false;
+    }
   }
-  initECG(): Promise<boolean> {
-    return SynchronySDKReactNative.initECG();
+  async initECG(): Promise<boolean> {
+    try {
+      const result = await SynchronySDKReactNative.initECG();
+      return result;
+    } catch (error) {
+      this.handleError(error);
+      return false;
+    }
   }
-  initDataTransfer(): Promise<boolean> {
-    return SynchronySDKReactNative.initDataTransfer();
+  async initDataTransfer(): Promise<boolean> {
+    try {
+      const result = await SynchronySDKReactNative.initDataTransfer();
+      return result;
+    } catch (error) {
+      this.handleError(error);
+      return false;
+    }
   }
-  getBatteryLevel(): Promise<number> {
-    return SynchronySDKReactNative.getBatteryLevel();
+  async getBatteryLevel(): Promise<number> {
+    try {
+      const result = await SynchronySDKReactNative.getBatteryLevel();
+      return result;
+    } catch (error) {
+      this.handleError(error);
+      return 0;
+    }
   }
-  getControllerFirmwareVersion(): Promise<string> {
-    return SynchronySDKReactNative.getControllerFirmwareVersion();
+  async getControllerFirmwareVersion(): Promise<string> {
+    try {
+      const result =
+        await SynchronySDKReactNative.getControllerFirmwareVersion();
+      return result;
+    } catch (error) {
+      this.handleError(error);
+      return '';
+    }
   }
 }

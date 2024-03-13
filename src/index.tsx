@@ -12,3 +12,6 @@ export type { BLEDevice, SynchronySample, SynchronyData };
 
 import SynchronyProfile from './SynchronyProfile';
 export { SynchronyProfile };
+
+import SynchronyController from './SynchronyController';
+export { SynchronyController };

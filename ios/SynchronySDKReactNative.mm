@@ -217,7 +217,7 @@ RCT_EXPORT_METHOD(startDataNotification:(RCTPromiseResolveBlock)resolve reject:(
     [self.eegData clear];
     [self.ecgData clear];
     self.impedanceData = [[NSMutableArray alloc] init];
-    self.railData = [[NSMutableArray alloc] init];
+    self.saturationData = [[NSMutableArray alloc] init];
     
     BOOL result = [self.profile startDataNotification];
     resolve(@(result));
@@ -413,7 +413,7 @@ RCT_REMAP_BLOCKING_SYNCHRONOUS_METHOD(getDeviceState, NSNumber *_Nonnull,
                 }
                 
                 self.impedanceData = impedanceData;
-                self.railData = railData;
+                self.saturationData = railData;
 //                NSLog(@"got impedance data : %@ %@", impedanceData, railData);
             }
             if (synchronyData == nil){
@@ -466,7 +466,7 @@ RCT_REMAP_BLOCKING_SYNCHRONOUS_METHOD(getDeviceState, NSNumber *_Nonnull,
     int lastSampleIndex = synchronyData.lastPackageIndex * synchronyData.packageSampleCount;
     
     NSMutableArray* impedanceData = self.impedanceData;
-    NSMutableArray* railData = self.railData;
+    NSMutableArray* saturationData = self.saturationData;
     NSMutableArray<NSMutableArray<SynchronySample*>*>* channelSamples = [NSMutableArray new];
     for (int channelIndex = 0; channelIndex < synchronyData.channelCount; ++ channelIndex){
         [channelSamples addObject:[NSMutableArray new]];
@@ -477,13 +477,13 @@ RCT_REMAP_BLOCKING_SYNCHRONOUS_METHOD(getDeviceState, NSNumber *_Nonnull,
             if ((synchronyData.channelMask & (1 << channelIndex)) > 0){
                 NSMutableArray<SynchronySample*>* samples = [channelSamples objectAtIndex:channelIndex];
                 float impedance = 0;
-                float rail = 0;
+                float saturation = 0;
                 if (synchronyData.dataType == NTF_ECG){
                     impedanceChannelIndex = self.eegData.channelCount;
                 }
                 if ((impedanceChannelIndex >= 0) && (impedanceChannelIndex < [impedanceData count])){
                     impedance = [[impedanceData objectAtIndex:impedanceChannelIndex] floatValue];
-                    rail = [[railData objectAtIndex:impedanceChannelIndex] floatValue];
+                    saturation = [[saturationData objectAtIndex:impedanceChannelIndex] floatValue];
                 }
                 ++impedanceChannelIndex;
                 
@@ -496,7 +496,7 @@ RCT_REMAP_BLOCKING_SYNCHRONOUS_METHOD(getDeviceState, NSNumber *_Nonnull,
                     sample.rawData = 0;
                     sample.convertData = 0;
                     sample.impedance = impedance;
-                    sample.rail = rail;
+                    sample.saturation = saturation;
                     sample.isLost = TRUE;
                 }else{
                     if (synchronyData.resolutionBits == 8){
@@ -517,7 +517,7 @@ RCT_REMAP_BLOCKING_SYNCHRONOUS_METHOD(getDeviceState, NSNumber *_Nonnull,
                     }
                     sample.convertData = sample.rawData * K;
                     sample.impedance = impedance;
-                    sample.rail = rail;
+                    sample.saturation = saturation;
                     sample.isLost = FALSE;
                 }
                 [samples addObject:sample];
@@ -579,7 +579,7 @@ RCT_REMAP_BLOCKING_SYNCHRONOUS_METHOD(getDeviceState, NSNumber *_Nonnull,
             [sampleResult setValue:@(sample.timeStampInMs) forKey:@"timeStampInMs"];
             [sampleResult setValue:@(sample.convertData) forKey:@"data"];
             [sampleResult setValue:@(sample.impedance) forKey:@"impedance"];
-            [sampleResult setValue:@(sample.rail) forKey:@"rail"];
+            [sampleResult setValue:@(sample.saturation) forKey:@"saturation"];
             [sampleResult setValue:@(sample.isLost) forKey:@"isLost"];
             
             [samplesResult addObject:sampleResult];
