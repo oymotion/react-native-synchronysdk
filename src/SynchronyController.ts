@@ -6,13 +6,105 @@ export default class SynchronyController {
   private static _instance: SynchronyController;
 
   private synchronyProfile: SynchronyProfile;
+  private _supportEEG: boolean;
+  private _supportECG: boolean;
+  private _hasInited: boolean;
+  private _isSearching: boolean;
+  private _isIniting: boolean;
+  private _isFetchingPower: boolean;
+  private _isFetchingFirmware: boolean;
+  private _isDataTransfering: boolean;
+  private _isSwitchDataTransfering: boolean;
+  private _device: BLEDevice | null;
+
+  private _reset(): void {
+    this._supportEEG =
+      this._supportECG =
+      this._hasInited =
+      this._isDataTransfering =
+      this._isIniting =
+      this._isFetchingPower =
+      this._isFetchingFirmware =
+      this._isSwitchDataTransfering =
+      this._isSearching =
+        false;
+    this._device = null;
+  }
 
   private constructor() {
-    this.synchronyProfile = new SynchronyProfile();
+    this._supportEEG =
+      this._supportECG =
+      this._hasInited =
+      this._isDataTransfering =
+      this._isIniting =
+      this._isFetchingPower =
+      this._isFetchingFirmware =
+      this._isSwitchDataTransfering =
+      this._isSearching =
+        false;
+    this._device = null;
+
+    this.synchronyProfile = new SynchronyProfile((newstate: DeviceStateEx) => {
+      if (newstate === DeviceStateEx.Disconnected) {
+        this._reset();
+      }
+    });
+
+    if (this.connectionState === DeviceStateEx.Ready) {
+      this.synchronyProfile.disconnect();
+    }
   }
 
   public static get Instance() {
     return this._instance || (this._instance = new this());
+  }
+
+  public get connectionState(): DeviceStateEx {
+    return this.synchronyProfile.getDeviceState();
+  }
+
+  public get supportEEG(): boolean {
+    return this._supportEEG;
+  }
+
+  public get supportECG(): boolean {
+    return this._supportECG;
+  }
+
+  public get hasInited(): boolean {
+    return this._hasInited;
+  }
+
+  public get isDataTransfering(): boolean {
+    return this._isDataTransfering;
+  }
+
+  public get device(): BLEDevice | null {
+    return this._device;
+  }
+
+  public set onStateChanged(callback: (newstate: DeviceStateEx) => void) {
+    if (callback) {
+      this.synchronyProfile.AddOnStateChanged(callback);
+    } else {
+      this.synchronyProfile.RemoveOnStateChanged();
+    }
+  }
+
+  public set onErrorCallback(callback: (reason: string) => void) {
+    if (callback) {
+      this.synchronyProfile.AddOnErrorCallback(callback);
+    } else {
+      this.synchronyProfile.RemoveOnErrorCallback();
+    }
+  }
+
+  public set onDataCallback(callback: (signalData: SynchronyData) => void) {
+    if (callback) {
+      this.synchronyProfile.AddOnDataCallback(callback);
+    } else {
+      this.synchronyProfile.RemoveOnDataCallback();
+    }
   }
 
   private async requestPermissionAndroid(): Promise<boolean> {
@@ -50,6 +142,11 @@ export default class SynchronyController {
 
   public async startSearch(timeoutInMs: number): Promise<Array<BLEDevice>> {
     return new Promise<Array<BLEDevice>>(async (resolve, reject) => {
+      if (this.connectionState !== DeviceStateEx.Disconnected) {
+        reject('please search when disconnected');
+        return;
+      }
+
       if (Platform.OS !== 'ios') {
         const result = await this.requestPermissionAndroid();
         if (!result) {
@@ -59,79 +156,174 @@ export default class SynchronyController {
         }
       }
 
+      if (this._isSearching) {
+        reject('please search after search return');
+        return;
+      }
+      this._isSearching = true;
+
       this.synchronyProfile
         .startScan(timeoutInMs)
         .then((devices: BLEDevice[]) => {
+          this._isSearching = false;
           resolve(devices);
         })
         .catch((reason: Error) => {
+          this._isSearching = false;
           reject(reason.message);
         });
     });
   }
 
   public async stopSearch(): Promise<void> {
+    if (this.connectionState !== DeviceStateEx.Ready) {
+      return;
+    }
+    if (!this._isSearching) {
+      return;
+    }
     return this.synchronyProfile.stopScan();
   }
 
   public async connect(device: BLEDevice): Promise<boolean> {
+    if (this.connectionState !== DeviceStateEx.Disconnected) {
+      return false;
+    }
+    this._device = device;
     return this.synchronyProfile.connect(device);
   }
 
   public async disconnect(): Promise<boolean> {
+    if (this.connectionState !== DeviceStateEx.Ready) {
+      return false;
+    }
+    this.stopDataNotification();
+    this._reset();
     return this.synchronyProfile.disconnect();
   }
 
   public async startDataNotification(): Promise<boolean> {
-    return this.synchronyProfile.startDataNotification();
+    if (this.connectionState !== DeviceStateEx.Ready) {
+      return false;
+    }
+    if (this._isSwitchDataTransfering) {
+      return false;
+    }
+    this._isSwitchDataTransfering = true;
+    try {
+      const result = await this.synchronyProfile.startDataNotification();
+      if (result) {
+        this._isDataTransfering = true;
+      }
+      this._isSwitchDataTransfering = false;
+      return result;
+    } catch (error) {
+      this._isSwitchDataTransfering = false;
+      this.synchronyProfile.emitError(error);
+      return false;
+    }
   }
 
   public async stopDataNotification(): Promise<boolean> {
-    return this.synchronyProfile.stopDataNotification();
-  }
-
-  public get connectionState(): DeviceStateEx {
-    return this.synchronyProfile.getDeviceState();
+    if (this.connectionState !== DeviceStateEx.Ready) {
+      return false;
+    }
+    if (this._isSwitchDataTransfering) {
+      return false;
+    }
+    this._isSwitchDataTransfering = true;
+    try {
+      const result = await this.synchronyProfile.stopDataNotification();
+      if (result) {
+        this._isDataTransfering = false;
+      }
+      this._isSwitchDataTransfering = false;
+      return result;
+    } catch (error) {
+      this._isSwitchDataTransfering = false;
+      this.synchronyProfile.emitError(error);
+      return false;
+    }
   }
 
   public async batteryPower(): Promise<number> {
-    return this.synchronyProfile.getBatteryLevel();
+    if (this.connectionState !== DeviceStateEx.Ready) {
+      return -1;
+    }
+    if (this._isFetchingPower) {
+      return -1;
+    }
+    this._isFetchingPower = true;
+    try {
+      const result = await this.synchronyProfile.getBatteryLevel();
+      this._isFetchingPower = false;
+      return result;
+    } catch (error) {
+      this._isFetchingPower = false;
+      this.synchronyProfile.emitError(error);
+      return -1;
+    }
   }
 
   public async firmwareVersion(): Promise<string> {
-    return this.synchronyProfile.getControllerFirmwareVersion();
-  }
-
-  public set onStateChanged(callback: (newstate: DeviceStateEx) => void) {
-    if (callback) {
-      this.synchronyProfile.AddOnStateChanged(callback);
-    } else {
-      this.synchronyProfile.RemoveOnStateChanged();
+    if (this.connectionState !== DeviceStateEx.Ready) {
+      return '';
     }
-  }
-
-  public set onErrorCallback(callback: (reason: string) => void) {
-    if (callback) {
-      this.synchronyProfile.AddOnErrorCallback(callback);
-    } else {
-      this.synchronyProfile.RemoveOnErrorCallback();
+    if (this._isFetchingFirmware) {
+      return '';
     }
-  }
-
-  public set onDataCallback(callback: (signalData: SynchronyData) => void) {
-    if (callback) {
-      this.synchronyProfile.AddOnDataCallback(callback);
-    } else {
-      this.synchronyProfile.RemoveOnDataCallback();
+    this._isFetchingFirmware = true;
+    try {
+      const result = await this.synchronyProfile.getControllerFirmwareVersion();
+      this._isFetchingFirmware = false;
+      return result;
+    } catch (error) {
+      this._isFetchingFirmware = false;
+      this.synchronyProfile.emitError(error);
+      return '';
     }
   }
 
   public async init(): Promise<boolean> {
-    const initEEG = await this.synchronyProfile.initEEG();
-    const initECG = await this.synchronyProfile.initECG();
-    if (initEEG || initECG) {
-      return await this.synchronyProfile.initDataTransfer();
+    if (this.connectionState !== DeviceStateEx.Ready) {
+      return false;
     }
-    return false;
+    if (this._isIniting) {
+      return this._hasInited;
+    }
+    if (this._hasInited) {
+      return this._hasInited;
+    }
+    this._isIniting = true;
+    try {
+      await this.stopDataNotification();
+    } catch (error) {}
+
+    try {
+      this._supportEEG = await this.synchronyProfile.initEEG();
+    } catch (error) {
+      this._supportEEG = false;
+    }
+
+    try {
+      this._supportECG = await this.synchronyProfile.initECG();
+    } catch (error) {
+      this._supportECG = false;
+    }
+
+    try {
+      if (this._supportEEG || this._supportECG) {
+        this._hasInited = await this.synchronyProfile.initDataTransfer();
+      } else {
+        this._hasInited = false;
+      }
+      this._isIniting = false;
+      return this._hasInited;
+    } catch (error) {
+      this._isIniting = false;
+      this._hasInited = false;
+      this.synchronyProfile.emitError(error);
+      return false;
+    }
   }
 }

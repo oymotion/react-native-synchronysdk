@@ -246,7 +246,6 @@ RCT_EXPORT_METHOD(stopScan:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRej
     return std::make_shared<facebook::react::NativeSynchronySDKReactNativeSpecJSI>(params);
 }
 
-
 - (NSString *)getDeviceState {
     BLEState value = self.profile.state;
     if (value == BLEStateUnConnected) {
@@ -257,10 +256,10 @@ RCT_EXPORT_METHOD(stopScan:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRej
       return @"Connected";
     } else if (value == BLEStateRunning) {
       return @"Ready";
-    } else if (value == BLEStateInvalid) {
-      return @"Disconnecting";
+    } else if (value >= BLEStateInvalid) {
+      return @"Invalid";
     }
-    return @"Disconnected";
+    return @"Invalid";
 }
 
 -(void)connect:(JS::NativeSynchronySDKReactNative::BLEDevice &)device resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject {
@@ -351,12 +350,10 @@ RCT_REMAP_BLOCKING_SYNCHRONOUS_METHOD(getDeviceState, NSNumber *_Nonnull,
             NSMutableArray* result = [NSMutableArray new];
             if(bleDevices != nil){
                 for (BLEPeripheral* device in bleDevices){
-                    if ([device.peripheralName hasPrefix:@"OB"]){
-                        NSDictionary *sensor = @{ @"Name" : device.peripheralName,
-                                                  @"Address" : device.macAddress,
-                                                  @"RSSI": device.rssi};
-                        [result addObject:sensor];
-                    }
+                    NSDictionary *sensor = @{ @"Name" : device.peripheralName,
+                                              @"Address" : device.macAddress,
+                                              @"RSSI": device.rssi};
+                    [result addObject:sensor];
                 }
                 resolve(result);
             }

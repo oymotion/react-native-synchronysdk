@@ -12,15 +12,14 @@ import {
 const SyncControllerInstance = SynchronyController.Instance;
 
 export default function App() {
-  const [device, setDevice] = React.useState<BLEDevice | null>();
+  const [device, setDevice] = React.useState<string>();
   const [state, setState] = React.useState<DeviceStateEx>();
-  const [message, setMessage] = React.useState<string | undefined>();
-  const [hasInit, setInit] = React.useState<boolean>();
-  const [dataTransfer, setDataTransfer] = React.useState<boolean>();
-  const [eegInfo, setEEGInfo] = React.useState<string | undefined>();
-  const [eegSample, setEEGSample] = React.useState<string | undefined>();
-  const [ecgInfo, setECGInfo] = React.useState<string | undefined>();
-  const [ecgSample, setECGSample] = React.useState<string | undefined>();
+  const [message, setMessage] = React.useState<string>();
+  const [eegInfo, setEEGInfo] = React.useState<string>();
+  const [eegSample, setEEGSample] = React.useState<string>();
+  const [ecgInfo, setECGInfo] = React.useState<string>();
+  const [ecgSample, setECGSample] = React.useState<string>();
+  const foundDevices = React.useRef<Array<BLEDevice>>();
   const lastEEG = React.useRef<SynchronyData>();
   const lastECG = React.useRef<SynchronyData>();
   let loopTimer = React.useRef<NodeJS.Timeout>();
@@ -28,12 +27,14 @@ export default function App() {
   function processSampleData(data: SynchronyData) {
     let samplesMsg = '';
     if (data.channelSamples.length > 0) {
-      samplesMsg =
-        'time: ' +
-        data.channelSamples[0]![0]!.timeStampInMs +
-        'ms' +
-        ' index: ' +
-        data.channelSamples[0]![0]!.sampleIndex;
+      if (data.channelSamples[0]!.length > 0) {
+        samplesMsg =
+          'time: ' +
+          data.channelSamples[0]![0]!.timeStampInMs +
+          'ms' +
+          ' index: ' +
+          data.channelSamples[0]![0]!.sampleIndex;
+      }
 
       data.channelSamples.forEach((oneChannelSamples) => {
         let sample = oneChannelSamples[0]!;
@@ -71,6 +72,10 @@ export default function App() {
   }
 
   React.useEffect(() => {
+    //init
+    setState(SyncControllerInstance.connectionState);
+    setDevice(SyncControllerInstance.device?.Name);
+
     if (!loopTimer.current) {
       loopTimer.current = setInterval(() => {
         const eeg = lastEEG.current;
@@ -79,12 +84,14 @@ export default function App() {
         if (ecg) processSampleData(ecg);
       }, 1000);
     }
-
+    //callbacks
     SyncControllerInstance.onStateChanged = (newstate: DeviceStateEx) => {
       setState(newstate);
       if (newstate === DeviceStateEx.Disconnected) {
-        setInit(false);
-        setDataTransfer(false);
+        lastEEG.current = undefined;
+        lastECG.current = undefined;
+      } else if (newstate === DeviceStateEx.Ready) {
+        setDevice(SyncControllerInstance.device?.Name);
       }
     };
 
@@ -93,6 +100,7 @@ export default function App() {
     };
 
     SyncControllerInstance.onDataCallback = (data: SynchronyData) => {
+      // setMessage('got synchrony data');
       if (data.dataType === DataType.NTF_EEG) {
         lastEEG.current = data;
       } else if (data.dataType === DataType.NTF_ECG) {
@@ -117,6 +125,7 @@ export default function App() {
     <View style={styles.container}>
       <Button
         onPress={() => {
+          //scan logic
           if (
             SyncControllerInstance.connectionState !==
             DeviceStateEx.Disconnected
@@ -129,23 +138,21 @@ export default function App() {
           SyncControllerInstance.startSearch(3000)
             .then((devices) => {
               setMessage('');
-              if (devices.length > 0) {
-                let selected = devices[0]!;
-                devices.forEach((bleDevice) => {
-                  if (bleDevice.RSSI > selected.RSSI) {
-                    selected = bleDevice;
-                  }
-                });
-                setDevice(selected);
-              } else {
-                setDevice(null);
-              }
-              setState(DeviceStateEx.Disconnected);
+              let filterDevices = devices.filter((item) => {
+                //filter OB serials
+                return item.Name.startsWith('OB');
+              });
+
+              let deviceList = '';
+              filterDevices.forEach((bleDevice) => {
+                deviceList += '\n' + bleDevice.RSSI + ' | ' + bleDevice.Name;
+              });
+              setDevice(deviceList);
+              foundDevices.current = filterDevices;
             })
-            .catch((reason: string) => {
-              setDevice(null);
-              setState(DeviceStateEx.Disconnected);
-              setMessage(reason);
+            .catch((error: Error) => {
+              setDevice('');
+              setMessage(error.message);
             });
         }}
         title="search"
@@ -154,18 +161,29 @@ export default function App() {
 
       <Button
         onPress={() => {
+          //connect/disconnect logic
+          // console.log(SyncControllerInstance.connectionState);
           if (SyncControllerInstance.connectionState === DeviceStateEx.Ready) {
             setMessage('disconnect');
-            setInit(false);
-            setDataTransfer(false);
             SyncControllerInstance.disconnect();
           } else if (
             SyncControllerInstance.connectionState !==
               DeviceStateEx.Connected &&
-            device
+            foundDevices.current
           ) {
-            setMessage('connect');
-            SyncControllerInstance.connect(device);
+            //select biggest RSSI device
+            let selected: BLEDevice | undefined;
+            foundDevices.current.forEach((bleDevice) => {
+              if (!selected) {
+                selected = bleDevice;
+              } else if (bleDevice.RSSI > selected.RSSI) {
+                selected = bleDevice;
+              }
+            });
+            if (selected) {
+              setMessage('connect');
+              SyncControllerInstance.connect(selected);
+            }
           }
         }}
         title="connect/disconnect"
@@ -173,12 +191,22 @@ export default function App() {
       <Text />
       <Button
         onPress={async () => {
-          if (SyncControllerInstance.connectionState === DeviceStateEx.Ready) {
+          //init data transfer logic
+
+          if (SyncControllerInstance.connectionState !== DeviceStateEx.Ready) {
+            setMessage('please connect before init');
+            return;
+          }
+
+          if (
+            SyncControllerInstance.connectionState === DeviceStateEx.Ready &&
+            !SyncControllerInstance.hasInited
+          ) {
+            setMessage('initing');
             const firmwareVersion =
               await SyncControllerInstance.firmwareVersion();
             const batteryPower = await SyncControllerInstance.batteryPower();
             const inited = await SyncControllerInstance.init();
-            setInit(inited);
             console.log(
               'Version: ' +
                 firmwareVersion +
@@ -203,17 +231,17 @@ export default function App() {
       <Text />
       <Button
         onPress={() => {
-          if (!hasInit) {
+          //start / stop data transfer
+
+          if (!SyncControllerInstance.hasInited) {
             setMessage('please init first');
             return;
           }
           if (SyncControllerInstance.connectionState === DeviceStateEx.Ready) {
-            if (dataTransfer) {
+            if (SyncControllerInstance.isDataTransfering) {
               setMessage('stop DataNotification');
-              setDataTransfer(false);
               SyncControllerInstance.stopDataNotification();
             } else {
-              setDataTransfer(true);
               setMessage('start DataNotification');
               SyncControllerInstance.startDataNotification();
             }
@@ -222,7 +250,7 @@ export default function App() {
         title="start/stop"
       />
       <Text />
-      <Text style={styles.text}>Device: {device?.Name}</Text>
+      <Text style={styles.text}>Device: {device}</Text>
       <Text />
       <Text style={styles.text}>State: {DeviceStateEx[Number(state)]}</Text>
       <Text />

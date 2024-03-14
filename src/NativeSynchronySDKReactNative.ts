@@ -7,6 +7,7 @@ export enum DeviceStateEx {
   Connected,
   Ready,
   Disconnecting,
+  Invalid,
 }
 
 export enum DataType {

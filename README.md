@@ -1,6 +1,8 @@
 # react-native-synchronysdk
-
 OYMotion synchrony sdk for react native
+
+## Brief
+Synchrony SDK is the software development kit for developers to access OYMotion products.
 
 
 ## Contributing
@@ -14,11 +16,6 @@ MIT
 ---
 
 Made with [create-react-native-library](https://github.com/callstack/react-native-builder-bob)
-
-# SynchronyiOSDemo
-
-## Brief
-Synchrony SDK is the software development kit for developers to access OYMotion products.
 
 ## Installation
 
@@ -110,9 +107,13 @@ export enum DeviceStateEx {
 
 ## 9. DataNotify
 
+### 9.1 Init data transfer
 
+```js
+public async init(): Promise<boolean> 
+```
 
-### 9.1 Start data transfer
+### 9.2 Start data transfer
 
 ```js
 public async startDataNotification(): Promise<boolean>
@@ -151,7 +152,7 @@ For start data transfer, use `startDataNotification` to start. Process data in o
     };
 ```
 
-### 9.2 Stop data transfer
+### 9.3 Stop data transfer
 
 ```js
 public async stopDataNotification(): Promise<boolean>

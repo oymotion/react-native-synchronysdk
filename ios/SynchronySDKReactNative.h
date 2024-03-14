@@ -2,8 +2,6 @@
 #import <React/RCTEventEmitter.h>
 
 const int TIMEOUT = 5; //5 seconds
-const int MAX_SAMPLE_COUNT = 256;
-const int MAX_CHANNEL_COUNT = 32;
 
 
 @interface SynchronySample : NSObject

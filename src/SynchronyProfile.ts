@@ -15,8 +15,14 @@ export default class SynchronyProfile {
   private onData: EmitterSubscription | undefined;
   private onStateChanged: EmitterSubscription | undefined;
 
-  constructor() {
+  constructor(callback: (newstate: DeviceStateEx) => void) {
     this.nativeEventEmitter = new NativeEventEmitter(SynchronySDKReactNative);
+    this.nativeEventEmitter.addListener(
+      'STATE_CHANGED',
+      (state: DeviceStateEx) => {
+        callback(state);
+      }
+    );
   }
 
   //-----Callbacks-----//
@@ -75,11 +81,13 @@ export default class SynchronyProfile {
       return DeviceStateEx.Connecting;
     } else if (value === 'Ready') {
       return DeviceStateEx.Ready;
+    } else if (value === 'Invalid') {
+      return DeviceStateEx.Invalid;
     }
     return value;
   }
 
-  handleError(error: any) {
+  emitError(error: any) {
     this.nativeEventEmitter.emit('GOT_ERROR', error);
   }
 
@@ -96,67 +104,24 @@ export default class SynchronyProfile {
     return SynchronySDKReactNative.disconnect();
   }
   async startDataNotification(): Promise<boolean> {
-    try {
-      const result = await SynchronySDKReactNative.startDataNotification();
-      return result;
-    } catch (error) {
-      this.handleError(error);
-      return false;
-    }
+    return SynchronySDKReactNative.startDataNotification();
   }
   async stopDataNotification(): Promise<boolean> {
-    try {
-      const result = await SynchronySDKReactNative.stopDataNotification();
-      return result;
-    } catch (error) {
-      this.handleError(error);
-      return false;
-    }
+    return SynchronySDKReactNative.stopDataNotification();
   }
   async initEEG(): Promise<boolean> {
-    try {
-      const result = await SynchronySDKReactNative.initEEG();
-      return result;
-    } catch (error) {
-      this.handleError(error);
-      return false;
-    }
+    return SynchronySDKReactNative.initEEG();
   }
   async initECG(): Promise<boolean> {
-    try {
-      const result = await SynchronySDKReactNative.initECG();
-      return result;
-    } catch (error) {
-      this.handleError(error);
-      return false;
-    }
+    return SynchronySDKReactNative.initECG();
   }
   async initDataTransfer(): Promise<boolean> {
-    try {
-      const result = await SynchronySDKReactNative.initDataTransfer();
-      return result;
-    } catch (error) {
-      this.handleError(error);
-      return false;
-    }
+    return SynchronySDKReactNative.initDataTransfer();
   }
   async getBatteryLevel(): Promise<number> {
-    try {
-      const result = await SynchronySDKReactNative.getBatteryLevel();
-      return result;
-    } catch (error) {
-      this.handleError(error);
-      return 0;
-    }
+    return SynchronySDKReactNative.getBatteryLevel();
   }
   async getControllerFirmwareVersion(): Promise<string> {
-    try {
-      const result =
-        await SynchronySDKReactNative.getControllerFirmwareVersion();
-      return result;
-    } catch (error) {
-      this.handleError(error);
-      return '';
-    }
+    return SynchronySDKReactNative.getControllerFirmwareVersion();
   }
 }
