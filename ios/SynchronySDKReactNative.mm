@@ -365,7 +365,7 @@ RCT_REMAP_BLOCKING_SYNCHRONOUS_METHOD(getDeviceState, NSNumber *_Nonnull,
 
 - (void)onSynchronyStateChange:(BLEState)newState {
     if (newState == BLEStateUnConnected){
-        self.dataFlag = 0;
+        self.dataFlag = DNF_OFF;
         self.impedanceData = nil;
         self.saturationData = nil;
     }
