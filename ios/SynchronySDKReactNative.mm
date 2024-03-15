@@ -364,6 +364,11 @@ RCT_REMAP_BLOCKING_SYNCHRONOUS_METHOD(getDeviceState, NSNumber *_Nonnull,
 }
 
 - (void)onSynchronyStateChange:(BLEState)newState {
+    if (newState == BLEStateUnConnected){
+        self.dataFlag = 0;
+        self.impedanceData = nil;
+        self.saturationData = nil;
+    }
     [self sendEvent:@"STATE_CHANGED" params:@(newState)];
 }
 
@@ -438,9 +443,11 @@ RCT_REMAP_BLOCKING_SYNCHRONOUS_METHOD(getDeviceState, NSNumber *_Nonnull,
                     }else{
                         synchronyData.lastPackageIndex = newPackageIndex - 1;
                     }
+                    synchronyData.lastPackageCounter += (deltaPackageIndex - 1);
                 }
                 [self readSamples:result synchronyData:synchronyData offset:readOffset lostSampleCount:0];
                 synchronyData.lastPackageIndex = newPackageIndex;
+                synchronyData.lastPackageCounter++;
                 [self sendSamples:synchronyData];
             } @catch (NSException *exception) {
                 NSLog(@"Error: %@", [exception description]);
@@ -460,7 +467,7 @@ RCT_REMAP_BLOCKING_SYNCHRONOUS_METHOD(getDeviceState, NSNumber *_Nonnull,
         sampleCount = lostSampleCount;
     
     double K = synchronyData.K;
-    int lastSampleIndex = synchronyData.lastPackageIndex * synchronyData.packageSampleCount;
+    int lastSampleIndex = synchronyData.lastPackageCounter * synchronyData.packageSampleCount;
     
     NSMutableArray* impedanceData = self.impedanceData;
     NSMutableArray* saturationData = self.saturationData;
@@ -545,13 +552,13 @@ RCT_REMAP_BLOCKING_SYNCHRONOUS_METHOD(getDeviceState, NSNumber *_Nonnull,
 
 -(void)clear{
     self.lastPackageIndex = 0;
+    self.lastPackageCounter = 0;
 }
 
 
 -(NSDictionary*)flushSamples{
     NSMutableDictionary* result = [[NSMutableDictionary alloc] init];
     [result setValue:@(self.dataType) forKey:@"dataType"];
-    [result setValue:@(self.lastPackageIndex) forKey:@"lastPackageIndex"];
     [result setValue:@(self.resolutionBits) forKey:@"resolutionBits"];
     [result setValue:@(self.sampleRate) forKey:@"sampleRate"];
     [result setValue:@(self.channelCount) forKey:@"channelCount"];

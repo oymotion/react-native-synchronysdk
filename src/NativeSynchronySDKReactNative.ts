@@ -34,7 +34,6 @@ export type SynchronySample = {
 
 export type SynchronyData = {
   dataType: DataType;
-  lastPackageIndex: number;
   resolutionBits: number;
   sampleRate: number;
   channelCount: number;

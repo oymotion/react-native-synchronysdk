@@ -1,5 +1,7 @@
 package com.synchronysdk;
 
+import android.util.Log;
+
 import androidx.annotation.Nullable;
 
 import com.facebook.react.bridge.NativeModule;

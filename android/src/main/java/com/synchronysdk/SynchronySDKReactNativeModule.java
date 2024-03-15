@@ -1,5 +1,6 @@
 package com.synchronysdk;
 
+import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothDevice;
 import android.util.Log;
 
@@ -43,48 +44,68 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
 
   static class SynchronyData {
     public int dataType;
+    public int lastPackageCounter;
     public int lastPackageIndex;
     public int resolutionBits;
     public int sampleRate;
     public int channelCount;
-    public int channelMask;
+    public long channelMask;
     public int packageSampleCount;
     public double K;
-    static class Sample {
+    static class SynchronySample {
       public int timeStampInMs;
       public int channelIndex;
       public int sampleIndex;
       public int rawData;
       public float data;
       public float impedance;
+      public float saturation;
       public boolean isLost;
     }
-    public Deque<Sample> channelSamples[];
+    public volatile Vector<Vector<SynchronySample>> channelSamples;
     public SynchronyData(){
-      channelSamples = new Deque[MAX_CHANNEL_COUNT];
-      for (int index = 0;index < MAX_CHANNEL_COUNT;++index){
-        channelSamples[index] = new ConcurrentLinkedDeque<>();
-      }
+
     }
 
-    public void clearSamples(){
-      for (int index1 = 0;index1 < MAX_CHANNEL_COUNT;++index1){
-        channelSamples[index1].clear();
-      }
+    public void clear(){
+      lastPackageCounter = 0;
+      lastPackageIndex = 0;
     }
   }
-  private SynchronyData synchronyDatas[] = new SynchronyData[DATA_TYPE_COUNT];
+  private volatile SynchronyData synchronyDatas[] = new SynchronyData[DATA_TYPE_COUNT];
 
-  private Vector<Float> impedanceData = new Vector<Float>();
+  private volatile Vector<Float> impedanceData = new Vector<Float>();
+  private volatile Vector<Float> saturationData = new Vector<Float>();
 
   private int notifyDataFlag = 0;
 
   private SynchronyProfile synchronyProfile;
 
+  private int listenerCount = 0;
 
-  private static void sendEvent(ReactContext reactContext, String eventName, @Nullable Object params)
+  @ReactMethod
+  public void addListener(String eventName) {
+    if (listenerCount == 0) {
+      // Set up any upstream listeners or background tasks as necessary
+    }
+
+    listenerCount += 1;
+//    Log.d(TAG, "add listener count: " + listenerCount);
+  }
+
+  @ReactMethod
+  public void removeListeners(double count) {
+    listenerCount -= count;
+    if (listenerCount == 0) {
+      // Remove upstream listeners, stop unnecessary background tasks
+    }
+//    Log.d(TAG, "remove listener count: " + listenerCount);
+  }
+
+  private void sendEvent(ReactContext reactContext, String eventName, @Nullable Object params)
   {
-    reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(eventName, params);
+    if (listenerCount > 0)
+      reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(eventName, params);
   }
   private static float getFloat(byte[] b, int offset) {
     int accum = 0;
@@ -102,30 +123,41 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
       sampleCount = lostSampleCount;
 
     double K = synchronyData.K;
-    int lastSampleIndex = synchronyData.lastPackageIndex * synchronyData.packageSampleCount;
+    int lastSampleIndex = synchronyData.lastPackageCounter * synchronyData.packageSampleCount;
+
+    Vector<Float> _impedanceData = impedanceData;
+    Vector<Float> _saturationData = saturationData;
+    Vector<Vector<SynchronyData.SynchronySample>> channelSamples = new Vector<>();
+    for (int channelIndex = 0; channelIndex < synchronyData.channelCount; ++ channelIndex){
+      channelSamples.add(new Vector<>());
+    }
 
     for (int sampleIndex = 0;sampleIndex < sampleCount; ++sampleIndex, ++lastSampleIndex){
-      for (int channelIndex = 0, impedanceIndex = 0; channelIndex < synchronyData.channelCount; ++channelIndex){
+      for (int channelIndex = 0, impedanceChannelIndex = 0; channelIndex < synchronyData.channelCount; ++channelIndex){
         if ((synchronyData.channelMask & (1 << channelIndex)) > 0){
-          if (synchronyData.dataType == SynchronyProfile.NotifDataType.NTF_ECG){
-            impedanceIndex = impedanceData.size() - 1;
-          }
+          Vector<SynchronyData.SynchronySample> samples = channelSamples.elementAt(channelIndex);
           float impedance = 0;
-          if (impedanceIndex < impedanceData.size()){
-            impedance = impedanceData.get(impedanceIndex);
+          float saturation = 0;
+          if (synchronyData.dataType == SynchronyProfile.NotifDataType.NTF_ECG){
+            impedanceChannelIndex = synchronyDatas[DATA_TYPE_EEG].channelCount;
           }
-          ++impedanceIndex;
-          SynchronyData.Sample dataSample = new SynchronyData.Sample();
+          if ((impedanceChannelIndex >= 0) && (impedanceChannelIndex < _impedanceData.size())){
+            impedance = _impedanceData.get(impedanceChannelIndex);
+            saturation = _saturationData.get(impedanceChannelIndex);
+          }
+          ++impedanceChannelIndex;
 
-          dataSample.channelIndex = channelIndex;
-          dataSample.sampleIndex = lastSampleIndex;
-          dataSample.timeStampInMs = lastSampleIndex * sampleInterval;
-          dataSample.impedance = impedance;
+          SynchronyData.SynchronySample dataItem = new SynchronyData.SynchronySample();
+          dataItem.channelIndex = channelIndex;
+          dataItem.sampleIndex = lastSampleIndex;
+          dataItem.timeStampInMs = lastSampleIndex * sampleInterval;
           if (lostSampleCount > 0){
             //add missing samples with 0
-            dataSample.rawData = 0;
-            dataSample.data = 0;
-            dataSample.isLost = true;
+            dataItem.rawData = 0;
+            dataItem.data = 0;
+            dataItem.impedance = impedance;
+            dataItem.saturation = saturation;
+            dataItem.isLost = true;
           }else{
             int rawData = 0;
             if (synchronyData.resolutionBits == 8){
@@ -139,36 +171,39 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
               offset += 3;
             }
             float converted = (float) (rawData * K);
-            dataSample.rawData = rawData;
-            dataSample.data = converted;
-            dataSample.isLost = false;
+            dataItem.rawData = rawData;
+            dataItem.data = converted;
+            dataItem.impedance = impedance;
+            dataItem.saturation = saturation;
+            dataItem.isLost = false;
           }
-          synchronyData.channelSamples[channelIndex].add(dataSample);
+          samples.add(dataItem);
         }
       }
     }
+    synchronyData.channelSamples = channelSamples;
   }
 
   private void sendSynchronyData(ReactContext reactContext, SynchronyData synchronyData){
     WritableMap result = Arguments.createMap();
     result.putInt("dataType", synchronyData.dataType);
-    result.putInt("lastPackageIndex", synchronyData.lastPackageIndex);
     result.putInt("resolutionBits", synchronyData.resolutionBits);
     result.putInt("sampleRate", synchronyData.sampleRate);
     result.putInt("channelCount", synchronyData.channelCount);
-    result.putInt("channelMask", synchronyData.channelMask);
+    result.putInt("channelMask", (int) synchronyData.channelMask);
     result.putInt("packageSampleCount", synchronyData.packageSampleCount);
     result.putDouble("K", synchronyData.K);
 
     WritableArray channelsResult = Arguments.createArray();
 
+    Vector<Vector<SynchronyData.SynchronySample>> channelSamples = synchronyData.channelSamples;
     for (int channelIndex = 0;channelIndex < synchronyData.channelCount;++channelIndex){
-      Deque<SynchronyData.Sample> channelSamples = synchronyData.channelSamples[channelIndex];
+      Vector<SynchronyData.SynchronySample> samples = channelSamples.get(channelIndex);
       WritableArray samplesResult = Arguments.createArray();
 
       int channelSampleSize = channelSamples.size();
       for (int sampleIndex = 0;sampleIndex < channelSampleSize;++sampleIndex){
-        SynchronyData.Sample sample = channelSamples.poll();
+        SynchronyData.SynchronySample sample = samples.get(sampleIndex);
         WritableMap sampleResult = Arguments.createMap();
         sampleResult.putInt("rawData", sample.rawData);
         sampleResult.putInt("sampleIndex", sample.sampleIndex);
@@ -176,6 +211,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
         sampleResult.putInt("timeStampInMs", sample.timeStampInMs);
         sampleResult.putDouble("data", sample.data);
         sampleResult.putDouble("impedance", sample.impedance);
+        sampleResult.putDouble("saturation", sample.saturation);
         sampleResult.putBoolean("isLost", sample.isLost);
         samplesResult.pushMap(sampleResult);
       }
@@ -189,25 +225,32 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
     super(context);
 
     dataCallback = data -> {
-      Log.i("DeviceActivity", "data type: " + data[0] + ", len: " + data.length);
+//      Log.i(TAG, "data type: " + data[0] + ", len: " + data.length);
       if (data[0] == SynchronyProfile.NotifDataType.NTF_IMPEDANCE){
         int offset = 1;
         int packageIndex = ((data[offset + 1] & 0xff) << 8 | (data[offset] & 0xff));
         offset += 2;
-        Log.d(TAG, "impedance package index: " + packageIndex);
-        impedanceData.clear();
-        int dataCount = (data.length - 3) / 4;
+//        Log.d(TAG, "impedance package index: " + packageIndex);
+        Vector<Float> _impedanceData = new Vector<>();
+        Vector<Float> _saturationData = new Vector<>();
+
+        int dataCount = (data.length - 3) / 4 / 2;
         for (int index = 0;index < dataCount;++index){
           float impedance = getFloat(data, offset);
           offset += 4;
-          impedanceData.add(impedance);
+          _impedanceData.add(impedance);
         }
+        for (int index = 0;index < dataCount;++index){
+          float impedance = getFloat(data, offset);
+          offset += 4;
+          _saturationData.add(impedance);
+        }
+        impedanceData = _impedanceData;
+        saturationData = _saturationData;
       }else if (data[0] == SynchronyProfile.NotifDataType.NTF_EEG ||
         data[0] == SynchronyProfile.NotifDataType.NTF_ECG ){
         int dataType = data[0] - SynchronyProfile.NotifDataType.NTF_EEG;
         SynchronyData synchronyData = synchronyDatas[dataType];
-        synchronyData.clearSamples();
-
         int offset = 1;
         try{
           int packageIndex = ((data[offset + 1] & 0xff) << 8 | (data[offset] & 0xff));
@@ -230,9 +273,11 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
             }else{
               synchronyData.lastPackageIndex = newPackageIndex - 1;
             }
+            synchronyData.lastPackageCounter += (deltaPackageIndex - 1);
           }
           readSamples(data, synchronyData, offset, 0);
           synchronyData.lastPackageIndex = newPackageIndex;
+          synchronyData.lastPackageCounter++;
           sendSynchronyData(context, synchronyData);
 
         }catch (Exception e){
@@ -251,6 +296,11 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
       @Override
       public void onSynchronyStateChange(SynchronyProfile.BluetoothDeviceStateEx newState) {
         Log.d(NAME, "got new device state:" + newState);
+        if (newState == SynchronyProfile.BluetoothDeviceStateEx.Disconnected){
+          notifyDataFlag = 0;
+          impedanceData.clear();
+          saturationData.clear();
+        }
         sendEvent(context, "STATE_CHANGED", newState.ordinal());
       }
     });
@@ -261,12 +311,10 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
   public String getName() {
     return NAME;
   }
-
-
   @ReactMethod
   @DoNotStrip
-  @Override
-  public void startScan(int timeoutInMS, Promise promise){
+  public void startScan(double _timeoutInMS, Promise promise){
+    int timeoutInMS = (int) _timeoutInMS;
     Log.d(NAME, "timeout:" + timeoutInMS);
     WritableArray result = new WritableNativeArray();
     if (timeoutInMS < 0)
@@ -282,6 +330,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
       }
     }, timeoutInMS);
     synchronyProfile.startScan(timeoutInMS, new ScanCallback() {
+      @SuppressLint("MissingPermission")
       @Override
       public void onScanResult(BluetoothDevice bluetoothDevice, int rssi) {
         WritableMap device = new WritableNativeMap();
@@ -333,25 +382,29 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
   @DoNotStrip
   @Override
   public void startDataNotification(Promise promise) {
-    if (synchronyProfile.getState() != SynchronyProfile.BluetoothDeviceStateEx.ready){
+    if (synchronyProfile.getState() != SynchronyProfile.BluetoothDeviceStateEx.Ready){
       promise.resolve(false);
       return;
     }
 
     impedanceData.clear();
+    saturationData.clear();
     for (int index = 0;index < DATA_TYPE_COUNT;++index){
       if (synchronyDatas[index] == null)
         continue;
-      synchronyDatas[index].lastPackageIndex = 0;
-      synchronyDatas[index].clearSamples();
+      synchronyDatas[index].clear();
     }
-    promise.resolve(synchronyProfile.startDataNotification(dataCallback));
+    boolean result = synchronyProfile.startDataNotification(dataCallback);
+
+    promise.resolve(result);
   }
   @ReactMethod
   @DoNotStrip
   @Override
   public void stopDataNotification(Promise promise) {
-    promise.resolve(synchronyProfile.stopDataNotification());
+    boolean result = synchronyProfile.stopDataNotification();
+
+    promise.resolve(result);
   }
   @ReactMethod
   @DoNotStrip
@@ -359,7 +412,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
   public void initEEG(Promise promise) {
     synchronyProfile.getEegDataConfig(new CommandResponseCallback() {
       @Override
-      public void onGetEegDataConfig(int resp, int sampleRate, int channelMask, int packageSampleCount, int resolutionBits, double microVoltConversionK) {
+      public void onGetEegDataConfig(int resp, int sampleRate, long channelMask, int packageSampleCount, int resolutionBits, double microVoltConversionK) {
         if (resp == SynchronyProfile.ResponseResult.RSP_CODE_SUCCESS) {
           Log.d(TAG, "Device State: " + "get  EEG Config succeeded");
           SynchronyData data = new SynchronyData();
@@ -369,7 +422,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
           data.channelMask = channelMask;
           data.packageSampleCount = packageSampleCount;
           data.K = microVoltConversionK;
-          data.lastPackageIndex = 0;
+          data.clear();
           synchronyDatas[DATA_TYPE_EEG] = data;
 
           synchronyProfile.getEegDataCap(new CommandResponseCallback() {
@@ -409,7 +462,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
           data.channelMask = channelMask;
           data.packageSampleCount = packageSampleCount;
           data.K = microVoltConversionK;
-          data.lastPackageIndex = 0;
+          data.clear();
           synchronyDatas[DATA_TYPE_ECG] = data;
 
           synchronyProfile.getEcgDataCap(new CommandResponseCallback() {
@@ -437,7 +490,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
   @DoNotStrip
   @Override
   public void initDataTransfer(Promise promise) {
-    if (synchronyProfile.getState() != SynchronyProfile.BluetoothDeviceStateEx.ready){
+    if (synchronyProfile.getState() != SynchronyProfile.BluetoothDeviceStateEx.Ready){
       promise.resolve(false);
       return;
     }
@@ -487,9 +540,9 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
 
   @ReactMethod(isBlockingSynchronousMethod = true)
   @DoNotStrip
-  @Override
-  public double getDeviceState() {
-    return synchronyProfile.getState().ordinal();
+  public String getDeviceState(){
+    String name = synchronyProfile.getState().name();
+//    Log.d(TAG, "status:" + name);
+    return synchronyProfile.getState().name();
   }
-
 }

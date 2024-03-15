@@ -20,6 +20,7 @@ const int TIMEOUT = 5; //5 seconds
 
 @property (atomic, assign) int dataType;
 @property (atomic, assign) int lastPackageIndex;
+@property (atomic, assign) int lastPackageCounter;
 @property (atomic, assign) int resolutionBits;
 @property (atomic, assign) int sampleRate;
 @property (atomic, assign) int channelCount;

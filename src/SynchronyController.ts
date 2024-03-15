@@ -16,6 +16,7 @@ export default class SynchronyController {
   private _isDataTransfering: boolean;
   private _isSwitchDataTransfering: boolean;
   private _device: BLEDevice | null;
+  private _powerCache: number;
 
   private _reset(): void {
     this._supportEEG =
@@ -28,7 +29,8 @@ export default class SynchronyController {
       this._isSwitchDataTransfering =
       this._isSearching =
         false;
-    this._device = null;
+    // this._device = null;
+    this._powerCache = -1;
   }
 
   private constructor() {
@@ -43,6 +45,7 @@ export default class SynchronyController {
       this._isSearching =
         false;
     this._device = null;
+    this._powerCache = -1;
 
     this.synchronyProfile = new SynchronyProfile((newstate: DeviceStateEx) => {
       if (newstate === DeviceStateEx.Disconnected) {
@@ -79,7 +82,7 @@ export default class SynchronyController {
     return this._isDataTransfering;
   }
 
-  public get device(): BLEDevice | null {
+  public get lastDevice(): BLEDevice | null {
     return this._device;
   }
 
@@ -186,7 +189,12 @@ export default class SynchronyController {
   }
 
   public async connect(device: BLEDevice): Promise<boolean> {
-    if (this.connectionState !== DeviceStateEx.Disconnected) {
+    if (
+      !(
+        this.connectionState === DeviceStateEx.Disconnected ||
+        this.connectionState === DeviceStateEx.Connected
+      )
+    ) {
       return false;
     }
     this._device = device;
@@ -194,7 +202,12 @@ export default class SynchronyController {
   }
 
   public async disconnect(): Promise<boolean> {
-    if (this.connectionState !== DeviceStateEx.Ready) {
+    if (
+      !(
+        this.connectionState === DeviceStateEx.Ready ||
+        this.connectionState === DeviceStateEx.Connected
+      )
+    ) {
       return false;
     }
     this.stopDataNotification();
@@ -251,11 +264,12 @@ export default class SynchronyController {
       return -1;
     }
     if (this._isFetchingPower) {
-      return -1;
+      return this._powerCache;
     }
     this._isFetchingPower = true;
     try {
       const result = await this.synchronyProfile.getBatteryLevel();
+      this._powerCache = result;
       this._isFetchingPower = false;
       return result;
     } catch (error) {
@@ -317,6 +331,7 @@ export default class SynchronyController {
       } else {
         this._hasInited = false;
       }
+      // console.log(this._supportEEG + "|" + this._supportECG + "|" + this._hasInited);
       this._isIniting = false;
       return this._hasInited;
     } catch (error) {

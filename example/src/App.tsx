@@ -74,7 +74,7 @@ export default function App() {
   React.useEffect(() => {
     //init
     setState(SyncControllerInstance.connectionState);
-    setDevice(SyncControllerInstance.device?.Name);
+    setDevice(SyncControllerInstance.lastDevice?.Name);
 
     if (!loopTimer.current) {
       loopTimer.current = setInterval(() => {
@@ -91,7 +91,11 @@ export default function App() {
         lastEEG.current = undefined;
         lastECG.current = undefined;
       } else if (newstate === DeviceStateEx.Ready) {
-        setDevice(SyncControllerInstance.device?.Name);
+        setDevice(SyncControllerInstance.lastDevice?.Name);
+        setEEGInfo('');
+        setEEGSample('');
+        setECGInfo('');
+        setECGSample('');
       }
     };
 
@@ -163,12 +167,15 @@ export default function App() {
         onPress={() => {
           //connect/disconnect logic
           // console.log(SyncControllerInstance.connectionState);
+
           if (SyncControllerInstance.connectionState === DeviceStateEx.Ready) {
             setMessage('disconnect');
             SyncControllerInstance.disconnect();
           } else if (
-            SyncControllerInstance.connectionState !==
-              DeviceStateEx.Connected &&
+            (SyncControllerInstance.connectionState ===
+              DeviceStateEx.Connected ||
+              SyncControllerInstance.connectionState ===
+                DeviceStateEx.Disconnected) &&
             foundDevices.current
           ) {
             //select biggest RSSI device

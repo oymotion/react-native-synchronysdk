@@ -14,7 +14,14 @@ abstract class SynchronySDKReactNativeSpec extends ReactContextBaseJavaModule {
   }
   @ReactMethod
   @DoNotStrip
-  public abstract void startScan(int timeoutInMS, Promise promise);
+  public abstract void addListener(String eventName);
+
+  @ReactMethod
+  @DoNotStrip
+  public abstract void removeListeners(double count);
+  @ReactMethod
+  @DoNotStrip
+  public abstract void startScan(double timeoutInMS, Promise promise);
 
   @ReactMethod
   @DoNotStrip
@@ -54,5 +61,5 @@ abstract class SynchronySDKReactNativeSpec extends ReactContextBaseJavaModule {
   ////////////////////////////////////////////////////////////////////////////////////////////
   @ReactMethod(isBlockingSynchronousMethod = true)
   @DoNotStrip
-  public abstract double getDeviceState();
+  public abstract String getDeviceState();
 }
