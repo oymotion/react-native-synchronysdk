@@ -33,7 +33,6 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDKReactNativeSpec {
   public static final String NAME = "SynchronySDKReactNative";
   public static final String TAG = "SynchronySDKReactNative";
-  static final int MAX_CHANNEL_COUNT = 32;
   static final int DATA_TYPE_EEG = 0;
   static final int DATA_TYPE_ECG = 1;
   static final int DATA_TYPE_COUNT = 2;
@@ -221,6 +220,17 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
     result.putArray("channelSamples", channelsResult);
     sendEvent(reactContext, "GOT_DATA", result);
   }
+
+  private void clearSamples(){
+    impedanceData.clear();
+    saturationData.clear();
+    for (int index = 0;index < DATA_TYPE_COUNT;++index){
+      if (synchronyDatas[index] == null)
+        continue;
+      synchronyDatas[index].clear();
+    }
+  }
+
   SynchronySDKReactNativeModule(ReactApplicationContext context) {
     super(context);
 
@@ -298,8 +308,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
         Log.d(NAME, "got new device state:" + newState);
         if (newState == SynchronyProfile.BluetoothDeviceStateEx.Disconnected){
           notifyDataFlag = 0;
-          impedanceData.clear();
-          saturationData.clear();
+          clearSamples();
         }
         sendEvent(context, "STATE_CHANGED", newState.ordinal());
       }
@@ -363,7 +372,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
         promise.reject("invalid device");
         return;
       }
-      SynchronyProfile.GF_RET_CODE code = synchronyProfile.connect(mac, false);
+      SynchronyProfile.GF_RET_CODE code = synchronyProfile.connect(mac, true);
       if (code == SynchronyProfile.GF_RET_CODE.GF_SUCCESS){
         promise.resolve(true);
       }else{
@@ -386,14 +395,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
       promise.resolve(false);
       return;
     }
-
-    impedanceData.clear();
-    saturationData.clear();
-    for (int index = 0;index < DATA_TYPE_COUNT;++index){
-      if (synchronyDatas[index] == null)
-        continue;
-      synchronyDatas[index].clear();
-    }
+    clearSamples();
     boolean result = synchronyProfile.startDataNotification(dataCallback);
 
     promise.resolve(result);
@@ -403,7 +405,6 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
   @Override
   public void stopDataNotification(Promise promise) {
     boolean result = synchronyProfile.stopDataNotification();
-
     promise.resolve(result);
   }
   @ReactMethod
