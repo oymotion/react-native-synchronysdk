@@ -181,7 +181,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
     sensorData.channelSamples = channelSamples;
   }
 
-  private void sendSynchronyData(ReactContext reactContext, SensorData sensorData){
+  private void sendSensorData(ReactContext reactContext, SensorData sensorData){
     WritableMap result = Arguments.createMap();
     result.putInt("dataType", sensorData.dataType);
     result.putInt("resolutionBits", sensorData.resolutionBits);
@@ -289,7 +289,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
           readSamples(data, sensorData, offset, 0);
           sensorData.lastPackageIndex = newPackageIndex;
           sensorData.lastPackageCounter++;
-          sendSynchronyData(context, sensorData);
+          sendSensorData(context, sensorData);
 
         }catch (Exception e){
           Log.d("DeviceActivity", "error in process data" + e.getLocalizedMessage());
