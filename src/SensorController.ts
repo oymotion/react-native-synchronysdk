@@ -1,11 +1,11 @@
 import { PermissionsAndroid, Platform } from 'react-native';
-import { DeviceStateEx, SynchronyProfile } from 'react-native-synchronysdk';
-import type { BLEDevice, SynchronyData } from 'react-native-synchronysdk';
+import { DeviceStateEx, SensorProfile } from 'react-native-synchronysdk';
+import type { BLEDevice, SensorData } from 'react-native-synchronysdk';
 
-export default class SynchronyController {
-  private static _instance: SynchronyController;
+export default class SensorController {
+  private static _instance: SensorController;
 
-  private synchronyProfile: SynchronyProfile;
+  private synchronyProfile: SensorProfile;
   private _supportEEG: boolean;
   private _supportECG: boolean;
   private _hasInited: boolean;
@@ -47,7 +47,7 @@ export default class SynchronyController {
     this._device = null;
     this._powerCache = -1;
 
-    this.synchronyProfile = new SynchronyProfile((newstate: DeviceStateEx) => {
+    this.synchronyProfile = new SensorProfile((newstate: DeviceStateEx) => {
       if (newstate === DeviceStateEx.Disconnected) {
         this._reset();
       }
@@ -102,7 +102,7 @@ export default class SynchronyController {
     }
   }
 
-  public set onDataCallback(callback: (signalData: SynchronyData) => void) {
+  public set onDataCallback(callback: (signalData: SensorData) => void) {
     if (callback) {
       this.synchronyProfile.AddOnDataCallback(callback);
     } else {

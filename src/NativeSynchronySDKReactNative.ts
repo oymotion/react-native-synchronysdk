@@ -21,7 +21,7 @@ export type BLEDevice = {
   RSSI: number;
 };
 
-export type SynchronySample = {
+export type Sample = {
   rawData: number;
   data: number;
   impedance: number;
@@ -32,7 +32,7 @@ export type SynchronySample = {
   isLost: boolean;
 };
 
-export type SynchronyData = {
+export type SensorData = {
   dataType: DataType;
   resolutionBits: number;
   sampleRate: number;
@@ -40,7 +40,7 @@ export type SynchronyData = {
   channelMask: number;
   packageSampleCount: number;
   K: number;
-  channelSamples: Array<Array<SynchronySample>>; //First array is channel, second array is samples
+  channelSamples: Array<Array<Sample>>; //First array is channel, second array is samples
 };
 
 export interface Spec extends TurboModule {

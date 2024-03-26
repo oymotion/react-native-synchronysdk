@@ -2,16 +2,16 @@ import { DeviceStateEx, DataType } from './NativeSynchronySDKReactNative';
 
 import type {
   BLEDevice,
-  SynchronySample,
-  SynchronyData,
+  Sample,
+  SensorData,
 } from './NativeSynchronySDKReactNative';
 
 export { DeviceStateEx, DataType };
 
-export type { BLEDevice, SynchronySample, SynchronyData };
+export type { BLEDevice, Sample, SensorData };
 
-import SynchronyProfile from './SynchronyProfile';
-export { SynchronyProfile };
+import SensorProfile from './SensorProfile';
+export { SensorProfile };
 
-import SynchronyController from './SynchronyController';
-export { SynchronyController };
+import SensorController from './SensorController';
+export { SensorController };

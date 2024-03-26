@@ -5,10 +5,10 @@ import { SynchronySDKReactNative } from './ModuleResolver';
 import {
   DeviceStateEx,
   type BLEDevice,
-  type SynchronyData,
+  type SensorData,
 } from './NativeSynchronySDKReactNative';
 
-export default class SynchronyProfile {
+export default class SensorProfile {
   protected nativeEventEmitter: NativeEventEmitter;
 
   private onError: EmitterSubscription | undefined;
@@ -55,11 +55,11 @@ export default class SynchronyProfile {
     this.onStateChanged = undefined;
   }
 
-  AddOnDataCallback(callback: (signalData: SynchronyData) => void) {
+  AddOnDataCallback(callback: (signalData: SensorData) => void) {
     this.RemoveOnDataCallback();
     this.onData = this.nativeEventEmitter.addListener(
       'GOT_DATA',
-      (signalData: SynchronyData) => {
+      (signalData: SensorData) => {
         callback(signalData);
       }
     );

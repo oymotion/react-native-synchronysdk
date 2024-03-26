@@ -2,14 +2,14 @@ import * as React from 'react';
 // import VConsole from '@kafudev/react-native-vconsole';
 import { StyleSheet, View, Text, Button } from 'react-native';
 import {
-  SynchronyController,
+  SensorController,
   DeviceStateEx,
   type BLEDevice,
-  type SynchronyData,
+  type SensorData,
   DataType,
 } from 'react-native-synchronysdk';
 
-const SyncControllerInstance = SynchronyController.Instance;
+const SensorControllerInstance = SensorController.Instance;
 
 export default function App() {
   const [device, setDevice] = React.useState<string>();
@@ -20,11 +20,11 @@ export default function App() {
   const [ecgInfo, setECGInfo] = React.useState<string>();
   const [ecgSample, setECGSample] = React.useState<string>();
   const foundDevices = React.useRef<Array<BLEDevice>>();
-  const lastEEG = React.useRef<SynchronyData>();
-  const lastECG = React.useRef<SynchronyData>();
+  const lastEEG = React.useRef<SensorData>();
+  const lastECG = React.useRef<SensorData>();
   let loopTimer = React.useRef<NodeJS.Timeout>();
 
-  function processSampleData(data: SynchronyData) {
+  function processSampleData(data: SensorData) {
     let samplesMsg = '';
     if (data.channelSamples.length > 0) {
       if (data.channelSamples[0]!.length > 0) {
@@ -74,8 +74,8 @@ export default function App() {
 
   React.useEffect(() => {
     //init
-    setState(SyncControllerInstance.connectionState);
-    setDevice(SyncControllerInstance.lastDevice?.Name);
+    setState(SensorControllerInstance.connectionState);
+    setDevice(SensorControllerInstance.lastDevice?.Name);
 
     if (!loopTimer.current) {
       loopTimer.current = setInterval(() => {
@@ -86,21 +86,21 @@ export default function App() {
       }, 1000);
     }
     //callbacks
-    SyncControllerInstance.onStateChanged = (newstate: DeviceStateEx) => {
+    SensorControllerInstance.onStateChanged = (newstate: DeviceStateEx) => {
       setState(newstate);
       if (newstate === DeviceStateEx.Disconnected) {
         lastEEG.current = undefined;
         lastECG.current = undefined;
       } else if (newstate === DeviceStateEx.Ready) {
-        setDevice(SyncControllerInstance.lastDevice?.Name);
+        setDevice(SensorControllerInstance.lastDevice?.Name);
       }
     };
 
-    SyncControllerInstance.onErrorCallback = (reason: string) => {
+    SensorControllerInstance.onErrorCallback = (reason: string) => {
       setMessage('got synchrony error: ' + reason);
     };
 
-    SyncControllerInstance.onDataCallback = (data: SynchronyData) => {
+    SensorControllerInstance.onDataCallback = (data: SensorData) => {
       // setMessage('got synchrony data');
       if (data.dataType === DataType.NTF_EEG) {
         lastEEG.current = data;
@@ -128,7 +128,7 @@ export default function App() {
         onPress={() => {
           //scan logic
           if (
-            SyncControllerInstance.connectionState !==
+            SensorControllerInstance.connectionState !==
             DeviceStateEx.Disconnected
           ) {
             setMessage('please scan if disconnected');
@@ -136,7 +136,7 @@ export default function App() {
           }
 
           setMessage('scanning');
-          SyncControllerInstance.startSearch(3000)
+          SensorControllerInstance.startSearch(3000)
             .then((devices) => {
               setMessage('');
               let filterDevices = devices.filter((item) => {
@@ -165,13 +165,15 @@ export default function App() {
           //connect/disconnect logic
           // console.log(SyncControllerInstance.connectionState);
 
-          if (SyncControllerInstance.connectionState === DeviceStateEx.Ready) {
+          if (
+            SensorControllerInstance.connectionState === DeviceStateEx.Ready
+          ) {
             setMessage('disconnect');
-            SyncControllerInstance.disconnect();
+            SensorControllerInstance.disconnect();
           } else if (
-            (SyncControllerInstance.connectionState ===
+            (SensorControllerInstance.connectionState ===
               DeviceStateEx.Connected ||
-              SyncControllerInstance.connectionState ===
+              SensorControllerInstance.connectionState ===
                 DeviceStateEx.Disconnected) &&
             foundDevices.current
           ) {
@@ -186,7 +188,7 @@ export default function App() {
             });
             if (selected) {
               setMessage('connect');
-              SyncControllerInstance.connect(selected);
+              SensorControllerInstance.connect(selected);
             }
           }
         }}
@@ -197,20 +199,22 @@ export default function App() {
         onPress={async () => {
           //init data transfer logic
 
-          if (SyncControllerInstance.connectionState !== DeviceStateEx.Ready) {
+          if (
+            SensorControllerInstance.connectionState !== DeviceStateEx.Ready
+          ) {
             setMessage('please connect before init');
             return;
           }
 
           if (
-            SyncControllerInstance.connectionState === DeviceStateEx.Ready &&
-            !SyncControllerInstance.hasInited
+            SensorControllerInstance.connectionState === DeviceStateEx.Ready &&
+            !SensorControllerInstance.hasInited
           ) {
             setMessage('initing');
             const firmwareVersion =
-              await SyncControllerInstance.firmwareVersion();
-            const batteryPower = await SyncControllerInstance.batteryPower();
-            const inited = await SyncControllerInstance.init();
+              await SensorControllerInstance.firmwareVersion();
+            const batteryPower = await SensorControllerInstance.batteryPower();
+            const inited = await SensorControllerInstance.init();
             console.log(
               'Version: ' +
                 firmwareVersion +
@@ -241,17 +245,19 @@ export default function App() {
         onPress={() => {
           //start / stop data transfer
 
-          if (!SyncControllerInstance.hasInited) {
+          if (!SensorControllerInstance.hasInited) {
             setMessage('please init first');
             return;
           }
-          if (SyncControllerInstance.connectionState === DeviceStateEx.Ready) {
-            if (SyncControllerInstance.isDataTransfering) {
+          if (
+            SensorControllerInstance.connectionState === DeviceStateEx.Ready
+          ) {
+            if (SensorControllerInstance.isDataTransfering) {
               setMessage('stop DataNotification');
-              SyncControllerInstance.stopDataNotification();
+              SensorControllerInstance.stopDataNotification();
             } else {
               setMessage('start DataNotification');
-              SyncControllerInstance.startDataNotification();
+              SensorControllerInstance.startDataNotification();
             }
           }
         }}
