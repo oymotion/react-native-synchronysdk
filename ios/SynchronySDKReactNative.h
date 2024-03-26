@@ -4,7 +4,7 @@
 const int TIMEOUT = 5; //5 seconds
 
 
-@interface SynchronySample : NSObject
+@interface Sample : NSObject
 @property (atomic, assign) int timeStampInMs;
 @property (atomic, assign) int sampleIndex;
 @property (atomic, assign) int channelIndex;
@@ -16,7 +16,7 @@ const int TIMEOUT = 5; //5 seconds
 @end
 
 
-@interface SynchronyData : NSObject
+@interface SensorData : NSObject
 
 @property (atomic, assign) int dataType;
 @property (atomic, assign) int lastPackageIndex;
@@ -27,7 +27,7 @@ const int TIMEOUT = 5; //5 seconds
 @property (atomic, assign) unsigned long long channelMask;
 @property (atomic, assign) int packageSampleCount;
 @property (atomic, assign) double K;
-@property (atomic, strong) NSMutableArray<NSMutableArray<SynchronySample*>*>* channelSamples;
+@property (atomic, strong) NSMutableArray<NSMutableArray<Sample*>*>* channelSamples;
 -(id)init;
 -(void)clear;
 -(NSDictionary*)flushSamples;
@@ -51,8 +51,8 @@ const int TIMEOUT = 5; //5 seconds
 
 @property (atomic, retain) SensorProfile* profile;
 @property (atomic, strong) BLEPeripheral* device;
-@property (atomic, strong) SynchronyData* eegData;
-@property (atomic, strong) SynchronyData* ecgData;
+@property (atomic, strong) SensorData* eegData;
+@property (atomic, strong) SensorData* ecgData;
 @property (atomic, strong) NSMutableArray* impedanceData;
 @property (atomic, strong) NSMutableArray* saturationData;
 @property (atomic, assign) int lastImpedanceIndex;

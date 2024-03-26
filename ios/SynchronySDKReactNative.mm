@@ -79,8 +79,8 @@ RCT_EXPORT_MODULE()
     }
     [self.profile getEcgDataConfig:^(GF_RET_CODE resp, int sampleRate, unsigned long long channelMask, int packageSampleCount, int resolutionBits, double conversionK) {
         if (resp == GF_SUCCESS){
-            self.ecgData = [[SynchronyData alloc] init];
-            SynchronyData* data = self.ecgData;
+            self.ecgData = [[SensorData alloc] init];
+            SensorData* data = self.ecgData;
             data.dataType = NTF_ECG;
             data.sampleRate = sampleRate;
             data.channelMask = channelMask;
@@ -92,12 +92,12 @@ RCT_EXPORT_MODULE()
             [self.profile getEcgDataCap:^(GF_RET_CODE resp, NSArray *supportedSampleRates, int maxChannelCount, int maxPackageSampleCount, NSArray *supportedResolutionBits) {
                 
                 if (resp == GF_SUCCESS){
-                    SynchronyData* data = self.ecgData;
+                    SensorData* data = self.ecgData;
                     data.channelCount = maxChannelCount;
                     self.dataFlag = (DataNotifyFlags)(self.dataFlag | DNF_ECG  |DNF_IMPEDANCE);
                     //            NSLog(@"got ecgData info: %d %d %llu %d", data.sampleRate, data.channelCount, data.channelMask, data.packageSampleCount);
                     
-                    [self.profile setEcgDataConfig:data.sampleRate channelMask:data.channelMask sampleCount:10 resolutionBits:data.resolutionBits cb:^(GF_RET_CODE resp) {
+                    [self.profile setEcgDataConfig:data.sampleRate channelMask:data.channelMask sampleCount:packageSampleCount resolutionBits:data.resolutionBits cb:^(GF_RET_CODE resp) {
                         if (resp == GF_SUCCESS){
                             data.packageSampleCount = packageSampleCount;
                             resolve(@(TRUE));
@@ -128,8 +128,8 @@ RCT_EXPORT_MODULE()
     }
     [self.profile getEegDataConfig:^(GF_RET_CODE resp, int sampleRate, unsigned long long channelMask, int packageSampleCount, int resolutionBits, double conversionK) {
         if (resp == GF_SUCCESS){
-            self.eegData = [[SynchronyData alloc] init];
-            SynchronyData* data = self.eegData;
+            self.eegData = [[SensorData alloc] init];
+            SensorData* data = self.eegData;
             data.dataType = NTF_EEG;
             data.sampleRate = sampleRate;
             data.channelMask = channelMask;
@@ -141,12 +141,12 @@ RCT_EXPORT_MODULE()
             [self.profile getEegDataCap:^(GF_RET_CODE resp, NSArray *supportedSampleRates, int maxChannelCount, int maxPackageSampleCount, NSArray *supportedResolutionBits) {
                 
                 if (resp == GF_SUCCESS){
-                    SynchronyData* data = self.eegData;
+                    SensorData* data = self.eegData;
                     data.channelCount = maxChannelCount;
                     self.dataFlag = (DataNotifyFlags)(self.dataFlag | DNF_EEG  |DNF_IMPEDANCE);
                     //            NSLog(@"got eegData info: %d %d %llu %d", data.sampleRate, data.channelCount, data.channelMask, data.packageSampleCount);
                     
-                    [self.profile setEegDataConfig:data.sampleRate channelMask:data.channelMask sampleCount:10 resolutionBits:data.resolutionBits cb:^(GF_RET_CODE resp) {
+                    [self.profile setEegDataConfig:data.sampleRate channelMask:data.channelMask sampleCount:packageSampleCount resolutionBits:data.resolutionBits cb:^(GF_RET_CODE resp) {
                         if (resp == GF_SUCCESS){
                             data.packageSampleCount = packageSampleCount;
                             resolve(@(TRUE));
@@ -365,7 +365,7 @@ RCT_EXPORT_METHOD(initEEG:(NSNumber*_Nonnull)packageSampleCount resolve:(RCTProm
 
 #endif
 
-#pragma mark - SynchronyDelegate
+#pragma mark - SensorDelegate
 
 - (void)onSensorErrorCallback:(NSError *)err {
     [self sendEvent:@"GOT_ERROR" params:[err description]];
@@ -409,13 +409,13 @@ RCT_EXPORT_METHOD(initEEG:(NSNumber*_Nonnull)packageSampleCount resolve:(RCTProm
     if (rawData.length > 1){
         unsigned char* result = (unsigned char*)rawData.bytes;
         if (result[0] == NTF_EEG || result[0] == NTF_ECG || result[0] == NTF_IMPEDANCE){
-            SynchronyData* synchronyData = nil;
+            SensorData* sensorData = nil;
             if (result[0] == NTF_EEG){
-                synchronyData = self.eegData;
+                sensorData = self.eegData;
 //                NSLog(@"got eeg : %d", rawData.length);
             }
             else if (result[0] == NTF_ECG){
-                synchronyData = self.ecgData;
+                sensorData = self.ecgData;
 //                NSLog(@"got ecg : %d", rawData.length );
             }
             else if (result[0] == NTF_IMPEDANCE){
@@ -452,7 +452,7 @@ RCT_EXPORT_METHOD(initEEG:(NSNumber*_Nonnull)packageSampleCount resolve:(RCTProm
                 self.saturationData = railData;
 //                NSLog(@"got impedance data : %@ %@", impedanceData, railData);
             }
-            if (synchronyData == nil){
+            if (sensorData == nil){
                 return;
             }
             int readOffset = 1;
@@ -462,32 +462,32 @@ RCT_EXPORT_METHOD(initEEG:(NSNumber*_Nonnull)packageSampleCount resolve:(RCTProm
                 readOffset += 2;
                 int newPackageIndex = packageIndex;
 //                NSLog(@"packageindex: %d", packageIndex);
-                int lastPackageIndex = synchronyData.lastPackageIndex;
+                int lastPackageIndex = sensorData.lastPackageIndex;
                 
                 if (packageIndex < lastPackageIndex){
                     packageIndex += 65536;
                 }else if (packageIndex == lastPackageIndex){
                     //same index is not right
-                    NSLog(@"Repeat index: %d", packageIndex);
+//                    NSLog(@"Repeat index: %d", packageIndex);
                     return;
                 }
                 int deltaPackageIndex = packageIndex - lastPackageIndex;
                 if (deltaPackageIndex > 1){
-                    int lostSampleCount = synchronyData.packageSampleCount * (deltaPackageIndex - 1);
-                    NSLog(@"lost samples: %d", lostSampleCount);
-                    [self readSamples:result synchronyData:synchronyData offset:0 lostSampleCount:lostSampleCount];
+                    int lostSampleCount = sensorData.packageSampleCount * (deltaPackageIndex - 1);
+//                    NSLog(@"lost samples: %d", lostSampleCount);
+                    [self readSamples:result sensorData:sensorData offset:0 lostSampleCount:lostSampleCount];
                     if (newPackageIndex == 0){
-                        synchronyData.lastPackageIndex = 65535;
+                        sensorData.lastPackageIndex = 65535;
                     }else{
-                        synchronyData.lastPackageIndex = newPackageIndex - 1;
+                        sensorData.lastPackageIndex = newPackageIndex - 1;
                     }
-                    synchronyData.lastPackageCounter += (deltaPackageIndex - 1);
+                    sensorData.lastPackageCounter += (deltaPackageIndex - 1);
                 }
-                [self readSamples:result synchronyData:synchronyData offset:readOffset lostSampleCount:0];
-                synchronyData.lastPackageIndex = newPackageIndex;
-                synchronyData.lastPackageCounter++;
-                [self sendSamples:synchronyData];
-//                NSLog(@"lastPackageCounter: %d", synchronyData.lastPackageCounter);
+                [self readSamples:result sensorData:sensorData offset:readOffset lostSampleCount:0];
+                sensorData.lastPackageIndex = newPackageIndex;
+                sensorData.lastPackageCounter++;
+                [self sendSamples:sensorData];
+
             } @catch (NSException *exception) {
                 NSLog(@"Error: %@", [exception description]);
             } @finally {
@@ -498,33 +498,33 @@ RCT_EXPORT_METHOD(initEEG:(NSNumber*_Nonnull)packageSampleCount resolve:(RCTProm
 }
 
 
-- (void)readSamples:(unsigned char *)data synchronyData:(SynchronyData*) synchronyData offset:(int)offset lostSampleCount:(int)lostSampleCount{
+- (void)readSamples:(unsigned char *)data sensorData:(SensorData*) sensorData offset:(int)offset lostSampleCount:(int)lostSampleCount{
     
-    int sampleCount = synchronyData.packageSampleCount;
-    int sampleInterval = 1000 / synchronyData.sampleRate; // sample rate should be less than 1000
+    int sampleCount = sensorData.packageSampleCount;
+    int sampleInterval = 1000 / sensorData.sampleRate; // sample rate should be less than 1000
     if (lostSampleCount > 0)
         sampleCount = lostSampleCount;
     
-    double K = synchronyData.K;
-    int lastSampleIndex = synchronyData.lastPackageCounter * synchronyData.packageSampleCount;
+    double K = sensorData.K;
+    int lastSampleIndex = sensorData.lastPackageCounter * sensorData.packageSampleCount;
     
     NSMutableArray* impedanceData = self.impedanceData;
     NSMutableArray* saturationData = self.saturationData;
-    NSMutableArray<NSMutableArray<SynchronySample*>*>* channelSamples = [synchronyData.channelSamples copy];
+    NSMutableArray<NSMutableArray<Sample*>*>* channelSamples = [sensorData.channelSamples copy];
     if (channelSamples == nil){
         channelSamples = [NSMutableArray new];
-        for (int channelIndex = 0; channelIndex < synchronyData.channelCount; ++ channelIndex){
+        for (int channelIndex = 0; channelIndex < sensorData.channelCount; ++ channelIndex){
             [channelSamples addObject:[NSMutableArray new]];
         }
     }
 
     for (int sampleIndex = 0;sampleIndex < sampleCount; ++sampleIndex, ++lastSampleIndex){
-        for (int channelIndex = 0, impedanceChannelIndex = 0; channelIndex < synchronyData.channelCount; ++channelIndex){
-            if ((synchronyData.channelMask & (1 << channelIndex)) > 0){
-                NSMutableArray<SynchronySample*>* samples = [channelSamples objectAtIndex:channelIndex];
+        for (int channelIndex = 0, impedanceChannelIndex = 0; channelIndex < sensorData.channelCount; ++channelIndex){
+            if ((sensorData.channelMask & (1 << channelIndex)) > 0){
+                NSMutableArray<Sample*>* samples = [channelSamples objectAtIndex:channelIndex];
                 float impedance = 0;
                 float saturation = 0;
-                if (synchronyData.dataType == NTF_ECG){
+                if (sensorData.dataType == NTF_ECG){
                     impedanceChannelIndex = self.eegData.channelCount;
                 }
                 if ((impedanceChannelIndex >= 0) && (impedanceChannelIndex < [impedanceData count])){
@@ -533,7 +533,7 @@ RCT_EXPORT_METHOD(initEEG:(NSNumber*_Nonnull)packageSampleCount resolve:(RCTProm
                 }
                 ++impedanceChannelIndex;
                 
-                SynchronySample* sample = [[SynchronySample alloc] init];
+                Sample* sample = [[Sample alloc] init];
                 sample.channelIndex = channelIndex;
                 sample.sampleIndex = lastSampleIndex;
                 sample.timeStampInMs = lastSampleIndex * sampleInterval;
@@ -545,17 +545,17 @@ RCT_EXPORT_METHOD(initEEG:(NSNumber*_Nonnull)packageSampleCount resolve:(RCTProm
                     sample.saturation = saturation;
                     sample.isLost = TRUE;
                 }else{
-                    if (synchronyData.resolutionBits == 8){
+                    if (sensorData.resolutionBits == 8){
                         int rawData = data[offset];
                         rawData -= 128;
                         offset += 1;
                         sample.rawData = rawData;
-                    }else if (synchronyData.resolutionBits == 16){
+                    }else if (sensorData.resolutionBits == 16){
                         int rawData = (data[offset] << 8) | (data[offset + 1]);
                         rawData -= 32768;
                         offset += 2;
                         sample.rawData = rawData;
-                    }else if (synchronyData.resolutionBits == 24){
+                    }else if (sensorData.resolutionBits == 24){
                         int rawData = (data[offset] << 16) | (data[offset + 1] << 8) | (data[offset + 2]);
                         rawData -= 8388608;
                         offset += 3;
@@ -571,23 +571,23 @@ RCT_EXPORT_METHOD(initEEG:(NSNumber*_Nonnull)packageSampleCount resolve:(RCTProm
         }
     }
     
-    synchronyData.channelSamples = channelSamples;
+    sensorData.channelSamples = channelSamples;
 }
 
-- (void)sendSamples:(SynchronyData*) synchronyData{
+- (void)sendSamples:(SensorData*) sensorData{
     
     dispatch_async([self senderQueue], ^{
-        NSDictionary* sampleResult = [synchronyData flushSamples];
+        NSDictionary* sampleResult = [sensorData flushSamples];
         [self sendEvent:@"GOT_DATA" params:sampleResult];
     });
 }
 @end
 
 
-@implementation SynchronySample
+@implementation Sample
 @end
 
-@implementation SynchronyData
+@implementation SensorData
 -(id)init{
     if (self = [super init]) {
 
@@ -602,6 +602,9 @@ RCT_EXPORT_METHOD(initEEG:(NSNumber*_Nonnull)packageSampleCount resolve:(RCTProm
 
 
 -(NSDictionary*)flushSamples{
+    NSMutableArray<NSMutableArray<Sample*>*>* channelSamples = self.channelSamples;
+    self.channelSamples = nil;
+    
     NSMutableDictionary* result = [[NSMutableDictionary alloc] init];
     [result setValue:@(self.dataType) forKey:@"dataType"];
     [result setValue:@(self.resolutionBits) forKey:@"resolutionBits"];
@@ -612,15 +615,13 @@ RCT_EXPORT_METHOD(initEEG:(NSNumber*_Nonnull)packageSampleCount resolve:(RCTProm
     [result setValue:@(self.K) forKey:@"K"];
     
     NSMutableArray* channelsResult = [[NSMutableArray alloc] init];
-    NSMutableArray<NSMutableArray<SynchronySample*>*>* channelSamples = self.channelSamples;
-    self.channelSamples = nil;
-    
+
     for (int channelIndex = 0;channelIndex < self.channelCount;++channelIndex){
-        NSMutableArray<SynchronySample*>* samples = [channelSamples objectAtIndex:channelIndex];
+        NSMutableArray<Sample*>* samples = [channelSamples objectAtIndex:channelIndex];
         NSMutableArray* samplesResult = [[NSMutableArray alloc] init];
         
         for (int sampleIndex = 0;sampleIndex < samples.count;++sampleIndex){
-            SynchronySample* sample = [samples objectAtIndex:sampleIndex];
+            Sample* sample = [samples objectAtIndex:sampleIndex];
             NSMutableDictionary* sampleResult = [[NSMutableDictionary alloc] init];
             [sampleResult setValue:@(sample.rawData) forKey:@"rawData"];
             [sampleResult setValue:@(sample.sampleIndex) forKey:@"sampleIndex"];
