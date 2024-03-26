@@ -124,10 +124,17 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
 
     Vector<Float> _impedanceData = impedanceData;
     Vector<Float> _saturationData = saturationData;
-    Vector<Vector<SensorData.Sample>> channelSamples = new Vector<>();
-    for (int channelIndex = 0; channelIndex < sensorData.channelCount; ++ channelIndex){
-      channelSamples.add(new Vector<>());
+
+    Vector<Vector<SensorData.Sample>> channelSamples ;
+    if (sensorData.channelSamples == null){
+      channelSamples = new Vector<>();
+      for (int channelIndex = 0; channelIndex < sensorData.channelCount; ++ channelIndex){
+        channelSamples.add(new Vector<>());
+      }
+    }else{
+      channelSamples = (Vector<Vector<SensorData.Sample>>)sensorData.channelSamples.clone();
     }
+
 
     for (int sampleIndex = 0;sampleIndex < sampleCount; ++sampleIndex, ++lastSampleIndex){
       for (int channelIndex = 0, impedanceChannelIndex = 0; channelIndex < sensorData.channelCount; ++channelIndex){
@@ -182,6 +189,9 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
   }
 
   private void sendSensorData(ReactContext reactContext, SensorData sensorData){
+    Vector<Vector<SensorData.Sample>> channelSamples = sensorData.channelSamples;
+    sensorData.channelSamples = null;
+
     WritableMap result = Arguments.createMap();
     result.putInt("dataType", sensorData.dataType);
     result.putInt("resolutionBits", sensorData.resolutionBits);
@@ -193,7 +203,6 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
 
     WritableArray channelsResult = Arguments.createArray();
 
-    Vector<Vector<SensorData.Sample>> channelSamples = sensorData.channelSamples;
     for (int channelIndex = 0; channelIndex < sensorData.channelCount; ++channelIndex){
       Vector<SensorData.Sample> samples = channelSamples.get(channelIndex);
       WritableArray samplesResult = Arguments.createArray();
