@@ -1,6 +1,10 @@
 import { PermissionsAndroid, Platform } from 'react-native';
-import { DeviceStateEx, SensorProfile } from 'react-native-synchronysdk';
-import type { BLEDevice, SensorData } from 'react-native-synchronysdk';
+import SensorProfile from './SensorProfile';
+import {
+  DeviceStateEx,
+  type BLEDevice,
+  type SensorData,
+} from './NativeSynchronySDKReactNative';
 
 export default class SensorController {
   private static _instance: SensorController;
