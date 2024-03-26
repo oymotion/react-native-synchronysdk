@@ -45,10 +45,10 @@ abstract class SynchronySDKReactNativeSpec extends ReactContextBaseJavaModule {
 
   @ReactMethod
   @DoNotStrip
-  public abstract void initEEG(Promise promise);
+  public abstract void initEEG(double packageSampleCount, Promise promise);
   @ReactMethod
   @DoNotStrip
-  public abstract void initECG(Promise promise);
+  public abstract void initECG(double packageSampleCount, Promise promise);
   @ReactMethod
   @DoNotStrip
   public abstract void initDataTransfer(Promise promise);

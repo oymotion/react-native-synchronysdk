@@ -269,6 +269,9 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
 
           if (packageIndex < lastPackageIndex){
             packageIndex += 65536;// package index is U16
+          }else if (packageIndex == lastPackageIndex){
+            //repeated package index
+            return;
           }
           int deltaPackageIndex = packageIndex - lastPackageIndex;
           if (deltaPackageIndex > 1){
@@ -409,7 +412,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
   @ReactMethod
   @DoNotStrip
   @Override
-  public void initEEG(Promise promise) {
+  public void initEEG(double packageSampleCount, Promise promise) {
     sensorProfile.getEegDataConfig(new CommandResponseCallback() {
       @Override
       public void onGetEegDataConfig(int resp, int sampleRate, long channelMask, int packageSampleCount, int resolutionBits, double microVoltConversionK) {
@@ -449,7 +452,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
   @ReactMethod
   @DoNotStrip
   @Override
-  public void initECG(Promise promise) {
+  public void initECG(double packageSampleCount, Promise promise) {
     sensorProfile.getEcgDataConfig(new CommandResponseCallback() {
       @Override
       public void onGetEcgDataConfig(int resp, int sampleRate, int channelMask, int packageSampleCount, int resolutionBits, double microVoltConversionK) {
