@@ -314,13 +314,13 @@ export default class SynchronyController {
     } catch (error) {}
 
     try {
-      this._supportEEG = await this.synchronyProfile.initEEG();
+      this._supportEEG = await this.synchronyProfile.initEEG(10);
     } catch (error) {
       this._supportEEG = false;
     }
 
     try {
-      this._supportECG = await this.synchronyProfile.initECG();
+      this._supportECG = await this.synchronyProfile.initECG(10);
     } catch (error) {
       this._supportECG = false;
     }

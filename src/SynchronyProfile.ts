@@ -109,11 +109,11 @@ export default class SynchronyProfile {
   async stopDataNotification(): Promise<boolean> {
     return SynchronySDKReactNative.stopDataNotification();
   }
-  async initEEG(): Promise<boolean> {
-    return SynchronySDKReactNative.initEEG();
+  async initEEG(packageSampleCount: number): Promise<boolean> {
+    return SynchronySDKReactNative.initEEG(packageSampleCount);
   }
-  async initECG(): Promise<boolean> {
-    return SynchronySDKReactNative.initECG();
+  async initECG(packageSampleCount: number): Promise<boolean> {
+    return SynchronySDKReactNative.initECG(packageSampleCount);
   }
   async initDataTransfer(): Promise<boolean> {
     return SynchronySDKReactNative.initDataTransfer();

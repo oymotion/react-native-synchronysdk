@@ -37,18 +37,19 @@ export default function App() {
       }
 
       data.channelSamples.forEach((oneChannelSamples) => {
-        let sample = oneChannelSamples[0]!;
-        const sampleMsg =
-          ' \n' +
-          (sample.channelIndex + 1) +
-          ' | data: ' +
-          sample.data.toFixed(0) +
-          'uV | ' +
-          ' impedance: ' +
-          (sample.impedance / 1000).toFixed(0) +
-          'K';
-
-        samplesMsg = samplesMsg + sampleMsg;
+        let sample = oneChannelSamples[0];
+        if (sample) {
+          const sampleMsg =
+            ' \n' +
+            (sample.channelIndex + 1) +
+            ' | data: ' +
+            sample.data.toFixed(0) +
+            'uV | ' +
+            ' impedance: ' +
+            (sample.impedance / 1000).toFixed(0) +
+            'K';
+          samplesMsg = samplesMsg + sampleMsg;
+        }
       });
     }
 
@@ -92,10 +93,6 @@ export default function App() {
         lastECG.current = undefined;
       } else if (newstate === DeviceStateEx.Ready) {
         setDevice(SyncControllerInstance.lastDevice?.Name);
-        setEEGInfo('');
-        setEEGSample('');
-        setECGInfo('');
-        setECGSample('');
       }
     };
 
@@ -111,7 +108,7 @@ export default function App() {
         lastECG.current = data;
       }
 
-      //process data as you wish
+      // process data as you wish
       data.channelSamples.forEach((oneChannelSamples) => {
         oneChannelSamples.forEach((sample) => {
           if (sample.isLost) {
@@ -231,6 +228,10 @@ export default function App() {
                 ' \n inited: ' +
                 inited
             );
+            setEEGInfo('');
+            setEEGSample('');
+            setECGInfo('');
+            setECGSample('');
           }
         }}
         title="init"

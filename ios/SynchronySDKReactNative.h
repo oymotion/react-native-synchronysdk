@@ -1,4 +1,4 @@
-#import <synchrony/synchrony.h>
+#import <sensor/sensorProfile.h>
 #import <React/RCTEventEmitter.h>
 
 const int TIMEOUT = 5; //5 seconds
@@ -49,7 +49,7 @@ const int TIMEOUT = 5; //5 seconds
 
 #endif
 
-@property (atomic, retain) SynchronyProfile* profile;
+@property (atomic, retain) SensorProfile* profile;
 @property (atomic, strong) BLEPeripheral* device;
 @property (atomic, strong) SynchronyData* eegData;
 @property (atomic, strong) SynchronyData* ecgData;

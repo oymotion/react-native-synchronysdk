@@ -52,8 +52,8 @@ export interface Spec extends TurboModule {
   disconnect(): Promise<boolean>;
   startDataNotification(): Promise<boolean>;
   stopDataNotification(): Promise<boolean>;
-  initEEG(): Promise<boolean>;
-  initECG(): Promise<boolean>;
+  initEEG(packageSampleCount: number): Promise<boolean>;
+  initECG(packageSampleCount: number): Promise<boolean>;
   initDataTransfer(): Promise<boolean>;
   getBatteryLevel(): Promise<number>;
   getControllerFirmwareVersion(): Promise<string>;

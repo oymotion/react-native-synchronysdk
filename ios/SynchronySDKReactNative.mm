@@ -1,11 +1,13 @@
 #import "SynchronySDKReactNative.h"
 
-@interface SynchronySDKReactNative() <SynchronyDelegate>
+@interface SynchronySDKReactNative() <SensorDelegate>
 {
     bool hasListeners;
     RCTPromiseResolveBlock  scanResolve;
     RCTPromiseRejectBlock   scanReject;
     NSArray*                scanDevices;
+    dispatch_queue_t        _methodQueue;
+    dispatch_queue_t        _senderQueue;
 }
 @end
 
@@ -16,11 +18,13 @@ RCT_EXPORT_MODULE()
 - (instancetype)init{
     self = [super init];
     if (self) {
-        self.profile = [[SynchronyProfile alloc] init];
+        self.profile = [[SensorProfile alloc] init];
         self.profile.delegate = self;
         hasListeners = NO;
         scanResolve = nil;
         scanReject = nil;
+        _methodQueue = dispatch_queue_create("SensorSDK", DISPATCH_QUEUE_SERIAL);
+        _senderQueue = dispatch_queue_create("SensorSDK_data", DISPATCH_QUEUE_SERIAL);
     }
     return self;
 }
@@ -31,15 +35,20 @@ RCT_EXPORT_MODULE()
 
 - (dispatch_queue_t)methodQueue
 {
- return dispatch_queue_create("SynchronySDK", DISPATCH_QUEUE_SERIAL);
+    return _methodQueue;
+}
+
+- (dispatch_queue_t)senderQueue
+{
+    return _senderQueue;
 }
 
 - (NSArray<NSString *> *)supportedEvents
 {
-  return @[@"GOT_ERROR",
-           @"STATE_CHANGED",
-           @"GOT_DATA",
-  ];
+    return @[@"GOT_ERROR",
+             @"STATE_CHANGED",
+             @"GOT_DATA",
+    ];
 }
 
 -(void)startObserving{
@@ -50,11 +59,117 @@ RCT_EXPORT_MODULE()
     hasListeners = NO;
 }
 
--(void) sendEvent:(NSString*)name params:(id)params{
+-(void)sendEvent:(NSString*)name params:(id)params{
     if(hasListeners){
         [self sendEventWithName:name body:params];
     }
 }
+
+-(void)clearSamples{
+    [self.eegData clear];
+    [self.ecgData clear];
+    self.impedanceData = [[NSMutableArray alloc] init];
+    self.saturationData = [[NSMutableArray alloc] init];
+}
+
+-(void)_initECG:(int)packageSampleCount resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject {
+    if (self.profile.state != BLEStateRunning){
+        reject(@"initECG", @"device not connected", nil);
+        return;
+    }
+    [self.profile getEcgDataConfig:^(GF_RET_CODE resp, int sampleRate, unsigned long long channelMask, int packageSampleCount, int resolutionBits, double conversionK) {
+        if (resp == GF_SUCCESS){
+            self.ecgData = [[SynchronyData alloc] init];
+            SynchronyData* data = self.ecgData;
+            data.dataType = NTF_ECG;
+            data.sampleRate = sampleRate;
+            data.channelMask = channelMask;
+            data.resolutionBits = resolutionBits;
+            data.packageSampleCount = packageSampleCount;
+            data.K = conversionK;
+            [data clear];
+            
+            [self.profile getEcgDataCap:^(GF_RET_CODE resp, NSArray *supportedSampleRates, int maxChannelCount, int maxPackageSampleCount, NSArray *supportedResolutionBits) {
+                
+                if (resp == GF_SUCCESS){
+                    SynchronyData* data = self.ecgData;
+                    data.channelCount = maxChannelCount;
+                    self.dataFlag = (DataNotifyFlags)(self.dataFlag | DNF_ECG  |DNF_IMPEDANCE);
+                    //            NSLog(@"got ecgData info: %d %d %llu %d", data.sampleRate, data.channelCount, data.channelMask, data.packageSampleCount);
+                    
+                    [self.profile setEcgDataConfig:data.sampleRate channelMask:data.channelMask sampleCount:10 resolutionBits:data.resolutionBits cb:^(GF_RET_CODE resp) {
+                        if (resp == GF_SUCCESS){
+                            data.packageSampleCount = packageSampleCount;
+                            resolve(@(TRUE));
+                        }else{
+                            NSString* err = [NSString stringWithFormat:@"device return error: %ld", (long)resp];
+                            reject(@"initECG",err, nil);
+                            return;
+                        }
+                    } timeout:TIMEOUT];
+                }else{
+                    NSString* err = [NSString stringWithFormat:@"device return error: %ld", (long)resp];
+                    reject(@"initECG",err, nil);
+                    return;
+                }
+            } timeout:TIMEOUT];
+        }else{
+            NSString* err = [NSString stringWithFormat:@"device return error: %ld", (long)resp];
+            reject(@"initECG",err, nil);
+            return;
+        }
+    } timeout:TIMEOUT];
+}
+
+- (void)_initEEG:(int)packageSampleCount resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject {
+    if (self.profile.state != BLEStateRunning){
+        reject(@"initEEG", @"device not connected", nil);
+        return;
+    }
+    [self.profile getEegDataConfig:^(GF_RET_CODE resp, int sampleRate, unsigned long long channelMask, int packageSampleCount, int resolutionBits, double conversionK) {
+        if (resp == GF_SUCCESS){
+            self.eegData = [[SynchronyData alloc] init];
+            SynchronyData* data = self.eegData;
+            data.dataType = NTF_EEG;
+            data.sampleRate = sampleRate;
+            data.channelMask = channelMask;
+            data.resolutionBits = resolutionBits;
+            data.packageSampleCount = packageSampleCount;
+            data.K = conversionK;
+            [data clear];
+            
+            [self.profile getEegDataCap:^(GF_RET_CODE resp, NSArray *supportedSampleRates, int maxChannelCount, int maxPackageSampleCount, NSArray *supportedResolutionBits) {
+                
+                if (resp == GF_SUCCESS){
+                    SynchronyData* data = self.eegData;
+                    data.channelCount = maxChannelCount;
+                    self.dataFlag = (DataNotifyFlags)(self.dataFlag | DNF_EEG  |DNF_IMPEDANCE);
+                    //            NSLog(@"got eegData info: %d %d %llu %d", data.sampleRate, data.channelCount, data.channelMask, data.packageSampleCount);
+                    
+                    [self.profile setEegDataConfig:data.sampleRate channelMask:data.channelMask sampleCount:10 resolutionBits:data.resolutionBits cb:^(GF_RET_CODE resp) {
+                        if (resp == GF_SUCCESS){
+                            data.packageSampleCount = packageSampleCount;
+                            resolve(@(TRUE));
+                        }else{
+                            NSString* err = [NSString stringWithFormat:@"device return error: %ld", (long)resp];
+                            reject(@"initEEG",err, nil);
+                            return;
+                        }
+                    } timeout:TIMEOUT];
+                }else{
+                    NSString* err = [NSString stringWithFormat:@"device return error: %ld", (long)resp];
+                    reject(@"initEEG",err, nil);
+                    return;
+                }
+            } timeout:TIMEOUT];
+        }else{
+            NSString* err = [NSString stringWithFormat:@"device return error: %ld", (long)resp];
+            reject(@"initEEG",err, nil);
+            return;
+        }
+    } timeout:TIMEOUT];
+}
+
 #pragma mark - Module methods
 
 RCT_EXPORT_METHOD(disconnect:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject) {
@@ -111,113 +226,15 @@ RCT_EXPORT_METHOD(initDataTransfer:(RCTPromiseResolveBlock)resolve reject:(RCTPr
     } timeout:TIMEOUT];
 }
 
-RCT_EXPORT_METHOD(initECG:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject) {
-    if (self.profile.state != BLEStateRunning){
-        reject(@"initECG", @"device not connected", nil);
-        return;
-    }
-    [self.profile getEcgDataConfig:^(GF_RET_CODE resp, int sampleRate, unsigned long long channelMask, int packageSampleCount, int resolutionBits, double conversionK) {
-        if (resp == GF_SUCCESS){
-            self.ecgData = [[SynchronyData alloc] init];
-            SynchronyData* data = self.ecgData;
-            data.dataType = NTF_ECG;
-            data.sampleRate = sampleRate;
-            data.channelMask = channelMask;
-            data.resolutionBits = resolutionBits;
-            data.packageSampleCount = packageSampleCount;
-            data.K = conversionK;
-            data.lastPackageIndex = 0;
-            
-            [self.profile getEcgDataCap:^(GF_RET_CODE resp, NSArray *supportedSampleRates, int maxChannelCount, int maxPackageSampleCount, NSArray *supportedResolutionBits) {
-                
-                if (resp == GF_SUCCESS){
-                    SynchronyData* data = self.ecgData;
-                    data.channelCount = maxChannelCount;
-                    self.dataFlag = (DataNotifyFlags)(self.dataFlag | DNF_ECG  |DNF_IMPEDANCE);
-//            NSLog(@"got ecgData info: %d %d %llu %d", data.sampleRate, data.channelCount, data.channelMask, data.packageSampleCount);
-                    
-                    [self.profile setEcgDataConfig:data.sampleRate channelMask:data.channelMask sampleCount:10 resolutionBits:data.resolutionBits cb:^(GF_RET_CODE resp) {
-                        if (resp == GF_SUCCESS){
-                            data.packageSampleCount = 10;
-                            resolve(@(TRUE));
-                        }else{
-                            NSString* err = [NSString stringWithFormat:@"device return error: %ld", (long)resp];
-                            reject(@"initECG",err, nil);
-                            return;
-                        }
-                    } timeout:TIMEOUT];
-                }else{
-                    NSString* err = [NSString stringWithFormat:@"device return error: %ld", (long)resp];
-                    reject(@"initECG",err, nil);
-                    return;
-                }
-            } timeout:TIMEOUT];
-        }else{
-            NSString* err = [NSString stringWithFormat:@"device return error: %ld", (long)resp];
-            reject(@"initECG",err, nil);
-            return;
-        }
-    } timeout:TIMEOUT];
-}
 
-RCT_EXPORT_METHOD(initEEG:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject) {
-    if (self.profile.state != BLEStateRunning){
-        reject(@"initEEG", @"device not connected", nil);
-        return;
-    }
-    [self.profile getEegDataConfig:^(GF_RET_CODE resp, int sampleRate, unsigned long long channelMask, int packageSampleCount, int resolutionBits, double conversionK) {
-        if (resp == GF_SUCCESS){
-            self.eegData = [[SynchronyData alloc] init];
-            SynchronyData* data = self.eegData;
-            data.dataType = NTF_EEG;
-            data.sampleRate = sampleRate;
-            data.channelMask = channelMask;
-            data.resolutionBits = resolutionBits;
-            data.packageSampleCount = packageSampleCount;
-            data.K = conversionK;
-            data.lastPackageIndex = 0;
-            
-            [self.profile getEegDataCap:^(GF_RET_CODE resp, NSArray *supportedSampleRates, int maxChannelCount, int maxPackageSampleCount, NSArray *supportedResolutionBits) {
-                
-                if (resp == GF_SUCCESS){
-                    SynchronyData* data = self.eegData;
-                    data.channelCount = maxChannelCount;
-                    self.dataFlag = (DataNotifyFlags)(self.dataFlag | DNF_EEG  |DNF_IMPEDANCE);
-//            NSLog(@"got eegData info: %d %d %llu %d", data.sampleRate, data.channelCount, data.channelMask, data.packageSampleCount);
-                    
-                    [self.profile setEegDataConfig:data.sampleRate channelMask:data.channelMask sampleCount:10 resolutionBits:data.resolutionBits cb:^(GF_RET_CODE resp) {
-                        if (resp == GF_SUCCESS){
-                            data.packageSampleCount = 10;
-                            resolve(@(TRUE));
-                        }else{
-                            NSString* err = [NSString stringWithFormat:@"device return error: %ld", (long)resp];
-                            reject(@"initEEG",err, nil);
-                            return;
-                        }
-                    } timeout:TIMEOUT];
-                }else{
-                    NSString* err = [NSString stringWithFormat:@"device return error: %ld", (long)resp];
-                    reject(@"initEEG",err, nil);
-                    return;
-                }
-            } timeout:TIMEOUT];
-        }else{
-            NSString* err = [NSString stringWithFormat:@"device return error: %ld", (long)resp];
-            reject(@"initEEG",err, nil);
-            return;
-        }
-    } timeout:TIMEOUT];
-}
+
 
 RCT_EXPORT_METHOD(startDataNotification:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject) {
     if (self.profile.state != BLEStateRunning){
         reject(@"stopDataNotification", @"device not connected", nil);
         return;
     }
-    [self.eegData clear];
-    [self.ecgData clear];
-    self.impedanceData = [[NSMutableArray alloc] init];
-    self.saturationData = [[NSMutableArray alloc] init];
+    [self clearSamples];
     
     BOOL result = [self.profile startDataNotification];
     resolve(@(result));
@@ -241,7 +258,7 @@ RCT_EXPORT_METHOD(stopScan:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRej
 // Don't compile this code when we build for the old architecture.
 #ifdef RCT_NEW_ARCH_ENABLED
 - (std::shared_ptr<facebook::react::TurboModule>)getTurboModule:
-    (const facebook::react::ObjCTurboModule::InitParams &)params
+(const facebook::react::ObjCTurboModule::InitParams &)params
 {
     return std::make_shared<facebook::react::NativeSynchronySDKReactNativeSpecJSI>(params);
 }
@@ -249,15 +266,15 @@ RCT_EXPORT_METHOD(stopScan:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRej
 - (NSString *)getDeviceState {
     BLEState value = self.profile.state;
     if (value == BLEStateUnConnected) {
-      return @"Disconnected";
+        return @"Disconnected";
     } else if (value == BLEStateConnecting) {
-      return @"Connecting";
+        return @"Connecting";
     } else if (value == BLEStateConnected) {
-      return @"Connected";
+        return @"Connected";
     } else if (value == BLEStateRunning) {
-      return @"Ready";
+        return @"Ready";
     } else if (value >= BLEStateInvalid) {
-      return @"Invalid";
+        return @"Invalid";
     }
     return @"Invalid";
 }
@@ -276,7 +293,7 @@ RCT_EXPORT_METHOD(stopScan:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRej
 
 
 -(void)startScan:(double)timeoutInMs resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject {
-
+    
     timeoutInMs /= 1000;
     
     if (scanResolve != nil){
@@ -291,6 +308,14 @@ RCT_EXPORT_METHOD(stopScan:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRej
     }
     scanResolve = resolve;
     scanReject = reject;
+}
+
+- (void)initECG:(double)packageSampleCount resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject {
+    [self _initECG:packageSampleCount resolve:resolve reject:reject];
+}
+
+- (void)initEEG:(double)packageSampleCount resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject {
+    [self _initEEG:packageSampleCount resolve:resolve reject:reject];
 }
 
 #else
@@ -330,15 +355,23 @@ RCT_REMAP_BLOCKING_SYNCHRONOUS_METHOD(getDeviceState, NSNumber *_Nonnull,
     return @(self.profile.state);
 }
 
+RCT_EXPORT_METHOD(initECG:(NSNumber*_Nonnull)packageSampleCount resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject){
+    [self _initECG:[packageSampleCount intValue] resolve:resolve reject:reject];
+}
+
+RCT_EXPORT_METHOD(initEEG:(NSNumber*_Nonnull)packageSampleCount resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject){
+    [self _initEEG:[packageSampleCount intValue] resolve:resolve reject:reject];
+}
+
 #endif
 
 #pragma mark - SynchronyDelegate
 
-- (void)onSynchronyErrorCallback:(NSError *)err {
+- (void)onSensorErrorCallback:(NSError *)err {
     [self sendEvent:@"GOT_ERROR" params:[err description]];
 }
 
-- (void)onSynchronyScanResult:(NSArray *)bleDevices {
+- (void)onSensorScanResult:(NSArray *)bleDevices {
     RCTPromiseResolveBlock  resolve = scanResolve;
     RCTPromiseRejectBlock   reject = scanReject;
     scanResolve = nil;
@@ -363,26 +396,27 @@ RCT_REMAP_BLOCKING_SYNCHRONOUS_METHOD(getDeviceState, NSNumber *_Nonnull,
     }
 }
 
-- (void)onSynchronyStateChange:(BLEState)newState {
+- (void)onSensorStateChange:(BLEState)newState {
     if (newState == BLEStateUnConnected){
         self.dataFlag = DNF_OFF;
-        self.impedanceData = nil;
-        self.saturationData = nil;
+        [self clearSamples];
     }
     [self sendEvent:@"STATE_CHANGED" params:@(newState)];
 }
 
 
-- (void)onSynchronyNotifyData:(NSData *)rawData {
+- (void)onSensorNotifyData:(NSData *)rawData {
     if (rawData.length > 1){
         unsigned char* result = (unsigned char*)rawData.bytes;
         if (result[0] == NTF_EEG || result[0] == NTF_ECG || result[0] == NTF_IMPEDANCE){
             SynchronyData* synchronyData = nil;
             if (result[0] == NTF_EEG){
                 synchronyData = self.eegData;
+//                NSLog(@"got eeg : %d", rawData.length);
             }
             else if (result[0] == NTF_ECG){
                 synchronyData = self.ecgData;
+//                NSLog(@"got ecg : %d", rawData.length );
             }
             else if (result[0] == NTF_IMPEDANCE){
                 NSMutableArray* impedanceData = [[NSMutableArray alloc] init];
@@ -427,16 +461,20 @@ RCT_REMAP_BLOCKING_SYNCHRONOUS_METHOD(getDeviceState, NSNumber *_Nonnull,
                 int packageIndex = *((unsigned short*)(result + readOffset));
                 readOffset += 2;
                 int newPackageIndex = packageIndex;
-                NSLog(@"packageindex: %d", packageIndex);
+//                NSLog(@"packageindex: %d", packageIndex);
                 int lastPackageIndex = synchronyData.lastPackageIndex;
                 
                 if (packageIndex < lastPackageIndex){
                     packageIndex += 65536;
+                }else if (packageIndex == lastPackageIndex){
+                    //same index is not right
+                    NSLog(@"Repeat index: %d", packageIndex);
+                    return;
                 }
                 int deltaPackageIndex = packageIndex - lastPackageIndex;
                 if (deltaPackageIndex > 1){
                     int lostSampleCount = synchronyData.packageSampleCount * (deltaPackageIndex - 1);
-//                    NSLog(@"lost samples: %d", lostSampleCount);
+                    NSLog(@"lost samples: %d", lostSampleCount);
                     [self readSamples:result synchronyData:synchronyData offset:0 lostSampleCount:lostSampleCount];
                     if (newPackageIndex == 0){
                         synchronyData.lastPackageIndex = 65535;
@@ -449,6 +487,7 @@ RCT_REMAP_BLOCKING_SYNCHRONOUS_METHOD(getDeviceState, NSNumber *_Nonnull,
                 synchronyData.lastPackageIndex = newPackageIndex;
                 synchronyData.lastPackageCounter++;
                 [self sendSamples:synchronyData];
+//                NSLog(@"lastPackageCounter: %d", synchronyData.lastPackageCounter);
             } @catch (NSException *exception) {
                 NSLog(@"Error: %@", [exception description]);
             } @finally {
@@ -471,11 +510,14 @@ RCT_REMAP_BLOCKING_SYNCHRONOUS_METHOD(getDeviceState, NSNumber *_Nonnull,
     
     NSMutableArray* impedanceData = self.impedanceData;
     NSMutableArray* saturationData = self.saturationData;
-    NSMutableArray<NSMutableArray<SynchronySample*>*>* channelSamples = [NSMutableArray new];
-    for (int channelIndex = 0; channelIndex < synchronyData.channelCount; ++ channelIndex){
-        [channelSamples addObject:[NSMutableArray new]];
+    NSMutableArray<NSMutableArray<SynchronySample*>*>* channelSamples = [synchronyData.channelSamples copy];
+    if (channelSamples == nil){
+        channelSamples = [NSMutableArray new];
+        for (int channelIndex = 0; channelIndex < synchronyData.channelCount; ++ channelIndex){
+            [channelSamples addObject:[NSMutableArray new]];
+        }
     }
-    
+
     for (int sampleIndex = 0;sampleIndex < sampleCount; ++sampleIndex, ++lastSampleIndex){
         for (int channelIndex = 0, impedanceChannelIndex = 0; channelIndex < synchronyData.channelCount; ++channelIndex){
             if ((synchronyData.channelMask & (1 << channelIndex)) > 0){
@@ -533,8 +575,11 @@ RCT_REMAP_BLOCKING_SYNCHRONOUS_METHOD(getDeviceState, NSNumber *_Nonnull,
 }
 
 - (void)sendSamples:(SynchronyData*) synchronyData{
-    NSDictionary* sampleResult = [synchronyData flushSamples];
-    [self sendEvent:@"GOT_DATA" params:sampleResult];
+    
+    dispatch_async([self senderQueue], ^{
+        NSDictionary* sampleResult = [synchronyData flushSamples];
+        [self sendEvent:@"GOT_DATA" params:sampleResult];
+    });
 }
 @end
 
