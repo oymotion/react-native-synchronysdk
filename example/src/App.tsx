@@ -97,11 +97,11 @@ export default function App() {
     };
 
     SensorControllerInstance.onErrorCallback = (reason: string) => {
-      setMessage('got synchrony error: ' + reason);
+      setMessage('got error: ' + reason);
     };
 
     SensorControllerInstance.onDataCallback = (data: SensorData) => {
-      // setMessage('got synchrony data');
+      // setMessage('got data');
       if (data.dataType === DataType.NTF_EEG) {
         lastEEG.current = data;
       } else if (data.dataType === DataType.NTF_ECG) {

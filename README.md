@@ -20,7 +20,7 @@ Made with [create-react-native-library](https://github.com/callstack/react-nativ
 ## Installation
 
 ```sh
-npm install react-native-synchronysdk
+yarn add react-native-synchronisdk
 ```
 
 ## 1. Permission 
@@ -54,7 +54,7 @@ SyncControllerInstance.onErrorCallback = (reason: string) => {
 //called when error occurs
 };
 
-SyncControllerInstance.onDataCallback = (data: SynchronyData) => {
+SyncControllerInstance.onDataCallback = (data: SensorData) => {
 //called after start data transfer
 };
 ```
@@ -131,7 +131,7 @@ export enum DataType {
 For start data transfer, use `startDataNotification` to start. Process data in onDataCallback.
 
 ```js
-    SyncControllerInstance.onDataCallback = (data: SynchronyData) => {
+    SyncControllerInstance.onDataCallback = (data: SensorData) => {
       if (data.dataType === DataType.NTF_EEG) {
         lastEEG.current = data;
       } else if (data.dataType === DataType.NTF_ECG) {
