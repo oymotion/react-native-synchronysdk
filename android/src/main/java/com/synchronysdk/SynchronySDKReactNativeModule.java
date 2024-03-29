@@ -33,8 +33,9 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
   public static final String TAG = "SynchronySDKReactNative";
   static final int DATA_TYPE_EEG = 0;
   static final int DATA_TYPE_ECG = 1;
-  static final int DATA_TYPE_COUNT = 2;
-
+  static final int DATA_TYPE_ACC = 2;
+  static final int DATA_TYPE_GYRO = 3;
+  static final int DATA_TYPE_COUNT = 4;
   static final int TIMEOUT = 50000;
 
   private DataNotificationCallback dataCallback;
@@ -73,8 +74,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
 
   private volatile Vector<Float> impedanceData = new Vector<Float>();
   private volatile Vector<Float> saturationData = new Vector<Float>();
-
-  private int notifyDataFlag = 0;
+  private int notifyDataFlag = SensorProfile.DataNotifFlags.DNF_IMPEDANCE | SensorProfile.DataNotifFlags.DNF_ACCELERATE;
 
   private SensorProfile sensorProfile;
 
@@ -112,7 +112,41 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
     accum = accum | (b[offset + 3] & 0xff) << 24;
     return Float.intBitsToFloat(accum);
   }
+  private void checkReadSamples(byte[] data, SensorData sensorData, int dataOffset){
+    int offset = 1;
+    try{
+      int packageIndex = ((data[offset + 1] & 0xff) << 8 | (data[offset] & 0xff));
+//                            Log.d(TAG, "package index: " + packageIndex);
+      offset += 2;
+      int newPackageIndex = packageIndex;
+      int lastPackageIndex = sensorData.lastPackageIndex;
 
+      if (packageIndex < lastPackageIndex){
+        packageIndex += 65536;// package index is U16
+      }else if (packageIndex == lastPackageIndex){
+        //repeated package index
+        return;
+      }
+      int deltaPackageIndex = packageIndex - lastPackageIndex;
+      if (deltaPackageIndex > 1){
+        int lostSampleCount = sensorData.packageSampleCount * (deltaPackageIndex - 1);
+        //add missing samples
+        readSamples(data, sensorData, 0, lostSampleCount);
+        if (newPackageIndex == 0){
+          sensorData.lastPackageIndex = 65535;
+        }else{
+          sensorData.lastPackageIndex = newPackageIndex - 1;
+        }
+        sensorData.lastPackageCounter += (deltaPackageIndex - 1);
+      }
+      readSamples(data, sensorData, dataOffset, 0);
+      sensorData.lastPackageIndex = newPackageIndex;
+      sensorData.lastPackageCounter++;
+    }catch (Exception e){
+      Log.d(TAG, "error in process data" + e.getLocalizedMessage());
+    }
+
+  }
   private void readSamples(byte[] data, SensorData sensorData, int offset, int lostSampleCount){
     int sampleCount = sensorData.packageSampleCount;
     int sampleInterval = 1000 / sensorData.sampleRate; // sample rate should be less than 1000
@@ -168,13 +202,15 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
               rawData = (0xff & data[offset]) - 128;
               offset += 1;
             }else if (sensorData.resolutionBits == 16){
-              rawData = ((0xff & data[offset]) << 8 | (0xff & data[offset + 1])) - 32768;
+              //it's native short LSB
+              rawData = (short)((0xff & data[offset + 1]) << 8 | (0xff & data[offset]));
               offset += 2;
             }else if (sensorData.resolutionBits == 24) {
+              //it's MSB
               rawData = ((0xff & data[offset]) << 16 | (0xff & data[offset + 1]) << 8 | (0xff & data[offset + 2])) - 8388608;
               offset += 3;
             }
-            float converted = (float) (rawData * K);
+            float converted = (float)(rawData * K);
             dataItem.rawData = rawData;
             dataItem.data = converted;
             dataItem.impedance = impedance;
@@ -207,8 +243,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
       Vector<SensorData.Sample> samples = channelSamples.get(channelIndex);
       WritableArray samplesResult = Arguments.createArray();
 
-      int channelSampleSize = channelSamples.size();
-      for (int sampleIndex = 0;sampleIndex < channelSampleSize;++sampleIndex){
+      for (int sampleIndex = 0;sampleIndex < samples.size();++sampleIndex){
         SensorData.Sample sample = samples.get(sampleIndex);
         WritableMap sampleResult = Arguments.createMap();
         sampleResult.putInt("rawData", sample.rawData);
@@ -238,8 +273,34 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
     }
   }
 
+  private void initACC_GYRO(){
+    SensorData data = new SensorData();
+    data.dataType = SensorProfile.NotifDataType.NTF_ACC_DATA;
+    data.sampleRate = 50;
+    data.resolutionBits = 16;
+    data.channelMask = 255;
+    data.channelCount = 3;
+    data.packageSampleCount = 1;
+    data.K = 1 / 8192.0;
+    data.clear();
+    sensorData[DATA_TYPE_ACC] = data;
+
+    SensorData data2 = new SensorData();
+    data2.dataType = SensorProfile.NotifDataType.NTF_GYO_DATA;
+    data2.sampleRate = 50;
+    data2.resolutionBits = 16;
+    data2.channelMask = 255;
+    data2.channelCount = 3;
+    data2.packageSampleCount = 1;
+    data2.K = 1 / 16.4;
+    data2.clear();
+    sensorData[DATA_TYPE_GYRO] = data2;
+  }
+
   SynchronySDKReactNativeModule(ReactApplicationContext context) {
     super(context);
+
+    initACC_GYRO();
 
     dataCallback = data -> {
 //      Log.i(TAG, "data type: " + data[0] + ", len: " + data.length);
@@ -268,41 +329,15 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
         data[0] == SensorProfile.NotifDataType.NTF_ECG ){
         int dataType = data[0] - SensorProfile.NotifDataType.NTF_EEG;
         SensorData sensorData = this.sensorData[dataType];
-        int offset = 1;
-        try{
-          int packageIndex = ((data[offset + 1] & 0xff) << 8 | (data[offset] & 0xff));
-//                            Log.d(TAG, "package index: " + packageIndex);
-          offset += 2;
-          int newPackageIndex = packageIndex;
-          int lastPackageIndex = sensorData.lastPackageIndex;
-
-          if (packageIndex < lastPackageIndex){
-            packageIndex += 65536;// package index is U16
-          }else if (packageIndex == lastPackageIndex){
-            //repeated package index
-            return;
-          }
-          int deltaPackageIndex = packageIndex - lastPackageIndex;
-          if (deltaPackageIndex > 1){
-            int lostSampleCount = sensorData.packageSampleCount * (deltaPackageIndex - 1);
-            Log.e("DeviceActivity", "lost samples:" + lostSampleCount);
-            //add missing samples
-            readSamples(data, sensorData, 0, lostSampleCount);
-            if (newPackageIndex == 0){
-              sensorData.lastPackageIndex = 65535;
-            }else{
-              sensorData.lastPackageIndex = newPackageIndex - 1;
-            }
-            sensorData.lastPackageCounter += (deltaPackageIndex - 1);
-          }
-          readSamples(data, sensorData, offset, 0);
-          sensorData.lastPackageIndex = newPackageIndex;
-          sensorData.lastPackageCounter++;
-          sendSensorData(context, sensorData);
-
-        }catch (Exception e){
-          Log.d("DeviceActivity", "error in process data" + e.getLocalizedMessage());
-        }
+        checkReadSamples(data, sensorData, 3);
+        sendSensorData(context, sensorData);
+      }else if (data[0] == SensorProfile.NotifDataType.NTF_ACC_DATA){
+        SensorData sensorDataACC = sensorData[DATA_TYPE_ACC];
+        SensorData sensorDataGYRO = sensorData[DATA_TYPE_GYRO];
+        checkReadSamples(data, sensorDataACC, 3);
+        checkReadSamples(data, sensorDataGYRO, 9);
+        sendSensorData(context, sensorDataACC);
+        sendSensorData(context, sensorDataGYRO);
       }
     };
 
@@ -317,7 +352,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
       public void onStateChange(SensorProfile.BluetoothDeviceStateEx newState) {
         Log.d(NAME, "got new device state:" + newState);
         if (newState == SensorProfile.BluetoothDeviceStateEx.Disconnected){
-          notifyDataFlag = 0;
+          notifyDataFlag = SensorProfile.DataNotifFlags.DNF_IMPEDANCE | SensorProfile.DataNotifFlags.DNF_ACCELERATE;
           clearSamples();
         }
         sendEvent(context, "STATE_CHANGED", newState.ordinal());
@@ -443,7 +478,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
               if (resp == SensorProfile.ResponseResult.RSP_CODE_SUCCESS){
                 Log.d(TAG, "Device State: " + "get  EEG Cap succeeded");
                 sensorData[DATA_TYPE_EEG].channelCount = maxChannelCount;
-                notifyDataFlag |= (SensorProfile.DataNotifFlags.DNF_IMPEDANCE | SensorProfile.DataNotifFlags.DNF_EEG);
+                notifyDataFlag |= (SensorProfile.DataNotifFlags.DNF_EEG);
                 promise.resolve(true);
               }else{
                 Log.d(TAG, "Device State: " + "get  EEG Cap failed, resp code: " + resp);
@@ -483,7 +518,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
               if (resp == SensorProfile.ResponseResult.RSP_CODE_SUCCESS){
                 Log.d(TAG, "Device State: " + "get  ECG Cap succeeded");
                 sensorData[DATA_TYPE_ECG].channelCount = maxChannelCount;
-                notifyDataFlag |= (SensorProfile.DataNotifFlags.DNF_IMPEDANCE | SensorProfile.DataNotifFlags.DNF_ECG);
+                notifyDataFlag |= (SensorProfile.DataNotifFlags.DNF_ECG);
                 promise.resolve(true);
               }else{
                 Log.d(TAG, "Device State: " + "get  ECG Cap failed, resp code: " + resp);
