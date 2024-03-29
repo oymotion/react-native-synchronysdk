@@ -112,7 +112,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
     accum = accum | (b[offset + 3] & 0xff) << 24;
     return Float.intBitsToFloat(accum);
   }
-  private void checkReadSamples(byte[] data, SensorData sensorData, int dataOffset){
+  private boolean checkReadSamples(byte[] data, SensorData sensorData, int dataOffset){
     int offset = 1;
     try{
       int packageIndex = ((data[offset + 1] & 0xff) << 8 | (data[offset] & 0xff));
@@ -125,7 +125,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
         packageIndex += 65536;// package index is U16
       }else if (packageIndex == lastPackageIndex){
         //repeated package index
-        return;
+        return false;
       }
       int deltaPackageIndex = packageIndex - lastPackageIndex;
       if (deltaPackageIndex > 1){
@@ -144,8 +144,9 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
       sensorData.lastPackageCounter++;
     }catch (Exception e){
       Log.d(TAG, "error in process data" + e.getLocalizedMessage());
+      return false;
     }
-
+    return true;
   }
   private void readSamples(byte[] data, SensorData sensorData, int offset, int lostSampleCount){
     int sampleCount = sensorData.packageSampleCount;
@@ -227,6 +228,10 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
   private void sendSensorData(ReactContext reactContext, SensorData sensorData){
     Vector<Vector<SensorData.Sample>> channelSamples = sensorData.channelSamples;
     sensorData.channelSamples = null;
+
+    if (channelSamples == null){
+      return;
+    }
 
     WritableMap result = Arguments.createMap();
     result.putInt("dataType", sensorData.dataType);
@@ -329,15 +334,16 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
         data[0] == SensorProfile.NotifDataType.NTF_ECG ){
         int dataType = data[0] - SensorProfile.NotifDataType.NTF_EEG;
         SensorData sensorData = this.sensorData[dataType];
-        checkReadSamples(data, sensorData, 3);
-        sendSensorData(context, sensorData);
+        if (checkReadSamples(data, sensorData, 3))
+          sendSensorData(context, sensorData);
       }else if (data[0] == SensorProfile.NotifDataType.NTF_ACC_DATA){
         SensorData sensorDataACC = sensorData[DATA_TYPE_ACC];
+        if (checkReadSamples(data, sensorDataACC, 3))
+          sendSensorData(context, sensorDataACC);
+
         SensorData sensorDataGYRO = sensorData[DATA_TYPE_GYRO];
-        checkReadSamples(data, sensorDataACC, 3);
-        checkReadSamples(data, sensorDataGYRO, 9);
-        sendSensorData(context, sensorDataACC);
-        sendSensorData(context, sensorDataGYRO);
+        if (checkReadSamples(data, sensorDataGYRO, 9))
+          sendSensorData(context, sensorDataGYRO);
       }
     };
 
