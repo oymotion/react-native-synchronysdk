@@ -138,6 +138,7 @@ export default function App() {
 
     SensorControllerInstance.onDataCallback = (data: SensorData) => {
       // setMessage('got data');
+
       if (data.dataType === DataType.NTF_EEG) {
         lastEEG.current = data;
       } else if (data.dataType === DataType.NTF_ECG) {
@@ -254,7 +255,7 @@ export default function App() {
             const firmwareVersion =
               await SensorControllerInstance.firmwareVersion();
             const batteryPower = await SensorControllerInstance.batteryPower();
-            const inited = await SensorControllerInstance.init();
+            const inited = await SensorControllerInstance.init(8);
             console.log(
               'Version: ' +
                 firmwareVersion +

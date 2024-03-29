@@ -302,7 +302,7 @@ export default class SensorController {
     }
   }
 
-  public async init(): Promise<boolean> {
+  public async init(packageSampleCount: number): Promise<boolean> {
     if (this.connectionState !== DeviceStateEx.Ready) {
       return false;
     }
@@ -318,13 +318,17 @@ export default class SensorController {
     } catch (error) {}
 
     try {
-      this._supportEEG = await this.synchronyProfile.initEEG(10);
+      this._supportEEG = await this.synchronyProfile.initEEG(
+        packageSampleCount
+      );
     } catch (error) {
       this._supportEEG = false;
     }
 
     try {
-      this._supportECG = await this.synchronyProfile.initECG(10);
+      this._supportECG = await this.synchronyProfile.initECG(
+        packageSampleCount
+      );
     } catch (error) {
       this._supportECG = false;
     }
