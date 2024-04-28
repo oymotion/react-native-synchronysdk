@@ -62,4 +62,8 @@ abstract class SynchronySDKReactNativeSpec extends ReactContextBaseJavaModule {
   @ReactMethod(isBlockingSynchronousMethod = true)
   @DoNotStrip
   public abstract String getDeviceState();
+
+  @ReactMethod(isBlockingSynchronousMethod = true)
+  @DoNotStrip
+  public abstract boolean isScaning();
 }

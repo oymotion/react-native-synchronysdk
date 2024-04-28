@@ -80,6 +80,15 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
 
   private int listenerCount = 0;
 
+  private boolean isScaning = false;
+  private Timer scanTimer;
+
+  private class BLEScanResult{
+    String name;
+    String mac;
+    int rssi;
+  }
+  private Vector<BLEScanResult> scanResult = new Vector<>();
   @ReactMethod
   public void addListener(String eventName) {
     if (listenerCount == 0) {
@@ -235,12 +244,12 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
 
     WritableMap result = Arguments.createMap();
     result.putInt("dataType", sensorData.dataType);
-    result.putInt("resolutionBits", sensorData.resolutionBits);
+//    result.putInt("resolutionBits", sensorData.resolutionBits);
     result.putInt("sampleRate", sensorData.sampleRate);
     result.putInt("channelCount", sensorData.channelCount);
-    result.putInt("channelMask", (int) sensorData.channelMask);
+//    result.putInt("channelMask", (int) sensorData.channelMask);
     result.putInt("packageSampleCount", sensorData.packageSampleCount);
-    result.putDouble("K", sensorData.K);
+//    result.putDouble("K", sensorData.K);
 
     WritableArray channelsResult = Arguments.createArray();
 
@@ -251,10 +260,10 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
       for (int sampleIndex = 0;sampleIndex < samples.size();++sampleIndex){
         SensorData.Sample sample = samples.get(sampleIndex);
         WritableMap sampleResult = Arguments.createMap();
-        sampleResult.putInt("rawData", sample.rawData);
+//        sampleResult.putInt("rawData", sample.rawData);
         sampleResult.putInt("sampleIndex", sample.sampleIndex);
-        sampleResult.putInt("channelIndex", sample.channelIndex);
-        sampleResult.putInt("timeStampInMs", sample.timeStampInMs);
+//        sampleResult.putInt("channelIndex", sample.channelIndex);
+//        sampleResult.putInt("timeStampInMs", sample.timeStampInMs);
         sampleResult.putDouble("data", sample.data);
         sampleResult.putDouble("impedance", sample.impedance);
         sampleResult.putDouble("saturation", sample.saturation);
@@ -326,7 +335,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
         for (int index = 0;index < dataCount;++index){
           float impedance = getFloat(data, offset);
           offset += 4;
-          _saturationData.add(impedance);
+          _saturationData.add(impedance / 10); //firmware value range 0-1000
         }
         impedanceData = _impedanceData;
         saturationData = _saturationData;
@@ -375,44 +384,87 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
   @ReactMethod
   @DoNotStrip
   public void startScan(double _timeoutInMS, Promise promise){
-    int timeoutInMS = (int) _timeoutInMS;
-    Log.d(NAME, "timeout:" + timeoutInMS);
-    WritableArray result = new WritableNativeArray();
-    if (timeoutInMS < 0)
-      timeoutInMS = 0;
-    else if (timeoutInMS > 30000)
-      timeoutInMS = 30000;
+    if (isScaning){
+      promise.reject("startScan", "please search after search return");
+      return;
+    }
+    int periodInMS = (int) _timeoutInMS;
+    Log.d(NAME, "timeout:" + periodInMS);
 
-    Timer timer = new Timer();
-    timer.schedule(new TimerTask() {
-      @Override
-      public void run() {
-        promise.resolve(result);
-      }
-    }, timeoutInMS);
-    sensorProfile.startScan(timeoutInMS, new ScanCallback() {
+    if (periodInMS < 6000)
+      periodInMS = 6000;
+    else if (periodInMS > 30000)
+      periodInMS = 30000;
+
+    ScanCallback scanCallback = new ScanCallback() {
       @SuppressLint("MissingPermission")
       @Override
       public void onScanResult(BluetoothDevice bluetoothDevice, int rssi) {
-        WritableMap device = new WritableNativeMap();
-        device.putString("Name", bluetoothDevice.getName());
-        device.putString("Address", bluetoothDevice.getAddress());
-        device.putInt("RSSI", rssi);
-        result.pushMap(device);
+        BLEScanResult result = new BLEScanResult();
+        result.mac = bluetoothDevice.getAddress();
+        result.name = bluetoothDevice.getName();
+        result.rssi = rssi;
+        scanResult.add(result);
       }
 
       @Override
       public void onScanFailed(int i) {
-        promise.reject(i+"");
+        stopScan(null);
       }
-    });
+    };
+
+    if (scanTimer != null){
+      scanTimer.cancel();
+    }
+    int finalTimeoutInMS = periodInMS;
+    scanTimer = new Timer();
+    scanTimer.scheduleAtFixedRate(new TimerTask() {
+      @Override
+      public void run() {
+        WritableArray result = new WritableNativeArray();
+        for (BLEScanResult deviceRet:
+             scanResult) {
+          WritableMap device = new WritableNativeMap();
+          device.putString("Name", deviceRet.name);
+          device.putString("Address", deviceRet.mac);
+          device.putInt("RSSI", deviceRet.rssi);
+          result.pushMap(device);
+        }
+        sendEvent(getReactApplicationContext(), "GOT_DEVICE_LIST", result);
+        if (isScaning){
+          scanResult.clear();
+          //keep search
+          boolean ret = sensorProfile.startScan(finalTimeoutInMS, scanCallback);
+          if (!ret){
+            stopScan(null);
+          }
+        }
+      }
+    },periodInMS + 100, periodInMS + 100);
+
+    scanResult.clear();
+    boolean ret = sensorProfile.startScan(periodInMS, scanCallback);
+    isScaning = ret;
+    if (!ret){
+      stopScan(null);
+    }
+    promise.resolve(ret);
   }
   @ReactMethod
   @DoNotStrip
   @Override
   public void stopScan(Promise promise) {
-    sensorProfile.stopScan();
-    promise.resolve(null);
+    if (scanTimer != null){
+      scanTimer.cancel();
+      scanTimer = null;
+    }
+    if (isScaning){
+      isScaning = false;
+      sensorProfile.stopScan();
+    }
+    if (promise != null){
+      promise.resolve(null);
+    }
   }
   @ReactMethod
   @DoNotStrip
@@ -424,7 +476,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
         promise.reject("invalid device");
         return;
       }
-      SensorProfile.GF_RET_CODE code = sensorProfile.connect(mac, true);
+      SensorProfile.GF_RET_CODE code = sensorProfile.connect(mac, false);
       if (code == SensorProfile.GF_RET_CODE.GF_SUCCESS){
         promise.resolve(true);
       }else{
@@ -463,6 +515,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
   @DoNotStrip
   @Override
   public void initEEG(double packageSampleCount, Promise promise) {
+    final int inPackageSampleCount = (int) packageSampleCount;
     sensorProfile.getEegDataConfig(new CommandResponseCallback() {
       @Override
       public void onGetEegDataConfig(int resp, int sampleRate, long channelMask, int packageSampleCount, int resolutionBits, double microVoltConversionK) {
@@ -486,6 +539,22 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
                 sensorData[DATA_TYPE_EEG].channelCount = maxChannelCount;
                 notifyDataFlag |= (SensorProfile.DataNotifFlags.DNF_EEG);
                 promise.resolve(true);
+                if (inPackageSampleCount <= 0){
+                  promise.resolve(true);
+                  return;
+                }
+                sensorProfile.setEegDataConfig(data.sampleRate, (int) data.channelMask, inPackageSampleCount, data.resolutionBits, new CommandResponseCallback() {
+                  @Override
+                  public void onSetCommandResponse(int resp) {
+                    if (resp == SensorProfile.ResponseResult.RSP_CODE_SUCCESS){
+                      data.packageSampleCount = inPackageSampleCount;
+                      promise.resolve(true);
+                    }else{
+                      Log.d(TAG, "Device State: " + "set  EEG Config failed, resp code: " + resp);
+                      promise.resolve(false);
+                    }
+                  }
+                }, TIMEOUT);
               }else{
                 Log.d(TAG, "Device State: " + "get  EEG Cap failed, resp code: " + resp);
                 promise.resolve(false);
@@ -503,6 +572,7 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
   @DoNotStrip
   @Override
   public void initECG(double packageSampleCount, Promise promise) {
+    final int inPackageSampleCount = (int) packageSampleCount;
     sensorProfile.getEcgDataConfig(new CommandResponseCallback() {
       @Override
       public void onGetEcgDataConfig(int resp, int sampleRate, int channelMask, int packageSampleCount, int resolutionBits, double microVoltConversionK) {
@@ -525,7 +595,22 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
                 Log.d(TAG, "Device State: " + "get  ECG Cap succeeded");
                 sensorData[DATA_TYPE_ECG].channelCount = maxChannelCount;
                 notifyDataFlag |= (SensorProfile.DataNotifFlags.DNF_ECG);
-                promise.resolve(true);
+                if (inPackageSampleCount <= 0){
+                  promise.resolve(true);
+                  return;
+                }
+                sensorProfile.setEcgDataConfig(data.sampleRate, (int) data.channelMask, inPackageSampleCount, data.resolutionBits, new CommandResponseCallback() {
+                  @Override
+                  public void onSetCommandResponse(int resp) {
+                    if (resp == SensorProfile.ResponseResult.RSP_CODE_SUCCESS){
+                      data.packageSampleCount = inPackageSampleCount;
+                      promise.resolve(true);
+                    }else{
+                      Log.d(TAG, "Device State: " + "set  ECG Config failed, resp code: " + resp);
+                      promise.resolve(false);
+                    }
+                  }
+                }, TIMEOUT);
               }else{
                 Log.d(TAG, "Device State: " + "get  ECG Cap failed, resp code: " + resp);
                 promise.resolve(false);
@@ -597,5 +682,11 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
     String name = sensorProfile.getState().name();
 //    Log.d(TAG, "status:" + name);
     return sensorProfile.getState().name();
+  }
+
+  @ReactMethod(isBlockingSynchronousMethod = true)
+  @DoNotStrip
+  public boolean isScaning(){
+    return isScaning;
   }
 }
