@@ -777,19 +777,54 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
   @ReactMethod
   @DoNotStrip
   @Override
-  public void getControllerFirmwareVersion(String deviceMac, Promise promise) {
+  public void getDeviceInfo(String deviceMac, Promise promise) {
     if (deviceMac == null || deviceMac.isEmpty()){
-      promise.reject("getControllerFirmwareVersion","invalid device");
+      promise.reject("getDeviceInfo","invalid device");
       return;
     }
     SensorProfile sensor = sensorScaner.getSensor(deviceMac);
+    WritableMap result = new WritableNativeMap();
+    sensor.getDeviceName(new CommandResponseCallback() {
+      @Override
+      public void onGetDeviceName(int resp, String deviceName) {
+        if (resp == SensorProfile.ResponseResult.RSP_CODE_SUCCESS){
+          result.putString("DeviceName", deviceName);
+        }
+      }
+    }, TIMEOUT);
+    sensor.getModelName(new CommandResponseCallback() {
+      @Override
+      public void onGetModelName(int resp, String modelName) {
+        if (resp == SensorProfile.ResponseResult.RSP_CODE_SUCCESS){
+          result.putString("ModelName", modelName);
+        }
+      }
+    }, TIMEOUT);
+    sensor.getSerialNumber(new CommandResponseCallback() {
+      @Override
+      public void onGetSerialNumber(int resp, String serialNumber) {
+        if (resp == SensorProfile.ResponseResult.RSP_CODE_SUCCESS){
+          result.putString("SerialNumber", serialNumber);
+        }
+      }
+    }, TIMEOUT);
+
+    sensor.getHardwareVersion(new CommandResponseCallback() {
+      @Override
+      public void onGetHardwareVersion(int resp, String hardwareType, String hardwareVersion) {
+        if (resp == SensorProfile.ResponseResult.RSP_CODE_SUCCESS){
+          result.putString("HardwareVersion", hardwareVersion);
+        }
+      }
+    }, TIMEOUT);
     sensor.getControllerFirmwareVersion(new CommandResponseCallback() {
       @Override
       public void onGetControllerFirmwareVersion(int resp, String firmwareVersion) {
         if (resp == SensorProfile.ResponseResult.RSP_CODE_SUCCESS){
-          promise.resolve(firmwareVersion);
+          result.putString("FirmwareVersion", firmwareVersion);
+          promise.resolve(result);
         }else{
-          promise.reject("getControllerFirmwareVersion","get ControllerFirmwareVersion fail:" + resp);
+          promise.reject("getDeviceInfo","get getDeviceInfo fail:" + resp);
         }
       }
     }, TIMEOUT);
