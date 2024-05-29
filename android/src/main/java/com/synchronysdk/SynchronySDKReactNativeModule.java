@@ -800,15 +800,6 @@ public class SynchronySDKReactNativeModule extends com.synchronysdk.SynchronySDK
         }
       }
     }, TIMEOUT);
-    sensor.getSerialNumber(new CommandResponseCallback() {
-      @Override
-      public void onGetSerialNumber(int resp, String serialNumber) {
-        if (resp == SensorProfile.ResponseResult.RSP_CODE_SUCCESS){
-          result.putString("SerialNumber", serialNumber);
-        }
-      }
-    }, TIMEOUT);
-
     sensor.getHardwareVersion(new CommandResponseCallback() {
       @Override
       public void onGetHardwareVersion(int resp, String hardwareType, String hardwareVersion) {

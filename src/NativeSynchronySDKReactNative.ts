@@ -26,7 +26,6 @@ export type BLEDevice = {
 export type DeviceInfo = {
   DeviceName: string;
   ModelName: string;
-  SerialNumber: string;
   HardwareVersion: string;
   FirmwareVersion: string;
 };
